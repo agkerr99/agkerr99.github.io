@@ -1,0 +1,20 @@
+---
+title: "Assn 1 - Sept 23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+
+```
+
+```{r}
+
+```
+
