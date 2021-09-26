@@ -1,0 +1,379 @@
+---
+title: "Assignment 1"
+author: "Alessandro Kerr"
+date: " Sept 26, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+
+pge_elec_all <- NULL
+
+```
+
+```{r}
+year <- 2017:2020
+quarters <- 1:4
+type <- "Electric"
+
+pge_elec <- NULL
+
+for (quarter in quarters) {
+  filename <- 
+    paste0("PGE_",
+         year,
+         "_Q", 
+         quarter,
+         "_",
+         type,
+         "UsageByZip.csv")
+  
+  temp <- read_csv(filename)
+  pge_elec <- rbind(pge_elec, temp)
+  saveRDS(pge_elec, "pge_elec")
+  
+  
+}
+```
+
+
+```{r}
+year <- 2021
+quarters <- 1:2
+type <- "Electric"
+
+pge_elec2 <- NULL
+
+for (quarter in quarters) {
+  filename <- 
+    paste0("PGE_",
+         year,
+         "_Q", 
+         quarter,
+         "_",
+         type,
+         "UsageByZip.csv")
+  
+  temp <- read_csv(filename)
+  pge_elec2 <- rbind(pge_elec2, temp)
+  saveRDS(pge_elec2, "pge_elec2")
+  
+  
+}
+
+pge_elec_all <- rbind(pge_elec, pge_elec2)
+
+```
+
+ˆ
+```{r}
+year <- 2017:2020
+quarters <- 1:4
+type <- "Gas"
+
+pge_gas <- NULL
+
+for (quarter in quarters) {
+  filename <- 
+    paste0("PGE_",
+         year,
+         "_Q", 
+         quarter,
+         "_",
+         type,
+         "UsageByZip.csv")
+  
+  temp <- read_csv(filename)
+  pge_gas <- rbind(pge_gas, temp)
+  saveRDS(pge_gas, "pge_gas")
+}
+```
+
+
+```{r}
+year <- 2021
+quarters <- 1:2
+type <- "Gas"
+
+pge_gas2 <- NULL
+
+for (quarter in quarters) {
+  filename <- 
+    paste0("PGE_",
+         year,
+         "_Q", 
+         quarter,
+         "_",
+         type,
+         "UsageByZip.csv")
+  
+  temp <- read_csv(filename)
+  pge_gas2 <- rbind(pge_gas2, temp)
+  saveRDS(pge_gas2, "pge_gas")
+}
+
+pge_gas_all <- rbind(pge_gas, pge_gas2)
+
+```
+
+```{r}
+
+pge_filter <- 
+  filter(
+  pge_elec_all,
+  CUSTOMERCLASS ==
+    "Elec- Commercial")
+
+pge_select <-
+  select(
+    pge_filter,
+    MONTH,
+    YEAR,
+    CUSTOMERCLASS,
+    TOTALKWH
+  )
+
+pge_mutate<-
+  mutate(
+    pge_select,
+    TOTALKBTU = 
+      TOTALKWH*3.412
+      )
+
+pge_select <- 
+  select(
+    pge_mutate,
+    -TOTALKWH
+  )
+
+pge_filter2 <- 
+  filter(
+  pge_elec_all,
+  CUSTOMERCLASS ==
+    "Elec- Residential")
+
+pge_select2 <-
+  select(
+    pge_filter2,
+    MONTH,
+    YEAR,
+    CUSTOMERCLASS,
+    TOTALKWH
+  )
+
+pge_mutate2<-
+  mutate(
+    pge_select2,
+    TOTALKBTU = 
+      TOTALKWH*3.412
+      )
+
+pge_select2 <- 
+  select(
+    pge_mutate2,
+    -TOTALKWH
+  )
+
+# Now for Gas
+
+pge_filter3 <- 
+  filter(
+  pge_gas_all,
+  CUSTOMERCLASS ==
+    "Gas- Commercial")
+
+pge_select3 <-
+  select(
+    pge_filter3,
+    MONTH,
+    YEAR,
+    CUSTOMERCLASS,
+    TOTALTHM
+  )
+
+pge_mutate3<-
+  mutate(
+    pge_select3,
+    TOTALKBTU = 
+      TOTALTHM*99.976
+      )
+
+pge_select3 <- 
+  select(
+    pge_mutate3,
+    -TOTALTHM
+  )
+
+pge_filter4 <- 
+  filter(
+  pge_gas_all,
+  CUSTOMERCLASS ==
+    "Gas- Residential")
+
+pge_select4 <-
+  select(
+    pge_filter4,
+    MONTH,
+    YEAR,
+    CUSTOMERCLASS,
+    TOTALTHM
+  )
+
+pge_mutate4<-
+  mutate(
+    pge_select4,
+    TOTALKBTU = 
+      TOTALTHM*99.976
+      )
+
+pge_select4 <- 
+  select(
+    pge_mutate4,
+    -TOTALTHM
+  )
+
+
+```
+
+```{r}
+# numbers <- 1:4
+# for (number in numbers) {
+#   file <- paste0(
+#     "pge_select",
+#     number)
+# 
+
+DATE = NULL
+
+  pge_mutate <- 
+    mutate(
+      pge_select,
+      DATE =
+        paste(
+          pge_select$YEAR,
+          pge_select$MONTH,
+          "01",
+          sep="-"
+        ) %>% as.Date()
+    )
+  
+  
+  pge_mutate2 <- 
+    mutate(
+      pge_select2,
+      DATE =
+        paste(
+          pge_select2$YEAR,
+          pge_select2$MONTH,
+          "01",
+          sep="-"
+        ) %>% as.Date()
+    )
+  
+  pge_mutate3 <- 
+    mutate(
+      pge_select3,
+      DATE =
+        paste(
+          pge_select3$YEAR,
+          pge_select3$MONTH,
+          "01",
+          sep="-"
+        ) %>% as.Date()
+    )
+  
+  
+  pge_mutate4 <- 
+    mutate(
+      pge_select4,
+      DATE =
+        paste(
+          pge_select4$YEAR,
+          pge_select4$MONTH,
+          "01",
+          sep="-"
+        ) %>% as.Date()
+    )
+  
+  pge_final_com = NULL
+  pge_final_res = NULL
+   
+  
+  pge_final_com <- rbind(pge_mutate, pge_mutate3)
+  pge_final_res <- rbind(pge_mutate2, pge_mutate4)
+  
+  
+  
+# }
+ 
+
+```
+
+```{r}
+pge_chart_com <- 
+  pge_final_com %>% 
+  ggplot() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
+  geom_bar( 
+    aes(
+      x = DATE ,
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS,
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Month",
+    y = "kBTU's",
+    title = "PG&E Territory Monthly Commercial Electricity and Gas Usage, 2017 to Present",
+    fill = "Utility Type"
+  )
+
+  
+pge_chart_com
+
+```
+
+There are noticable differences between the Commerical utility use, notably electricity, during the COVID pandemic. In April 2020, a sharp decrease in commerical electricity use can be seen on the above chart. 
+
+```{r}
+pge_chart_res <- 
+  pge_final_res %>% 
+  ggplot() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
+  geom_bar( 
+    aes(
+      x = DATE,
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS,
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Month",
+    y = "kBTU's",
+    title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 2017 to Present",
+    fill = "Utility Type"
+  )
+
+  
+pge_chart_res
+```
+
+In terms of residential electricity and gas use across the four analysis years, there was a slight increase as a result of the pandemic. This is reasonable as there were more people working and spending extra time at home. 
+
+Key assumptions: It is assumed that the given CSV files obtained from the Pacific Gas and Electricity Company are accurate and representative of the actual trends.   
