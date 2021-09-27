@@ -337,7 +337,8 @@ pge_chart_com <-
   labs(
     x = "Month",
     y = "kBTU's",
-    title = "PG&E Territory Monthly Commercial Electricity and Gas Usage, 2017 to Present",
+    title = "PG&E Territory Monthly Commercial Electricity and Gas Usage, 
+                              2017 to Present",
     fill = "Utility Type"
   )
 
@@ -346,8 +347,42 @@ pge_chart_com
 
 ```
 
-There are noticable differences between the Commerical utility use, notably electricity, during the COVID pandemic. In April 2020, a sharp decrease in commerical electricity use can be seen on the above chart. 
+There are noticable differences between the Commerical utility use, notably electricity, during the COVID pandemic. In April 2020, a sharp decrease in commerical electricity use can be seen on the above chart. These trend can be seen in more detail below, where only 2019 and 2020 are plotted: 
 
+
+```{r}
+
+pge_final_com2 <- filter(pge_final_com, YEAR %in% c("2019", "2020"))
+
+pge_chart_com2 <- 
+  pge_final_com2 %>% 
+  ggplot() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
+  geom_bar( 
+    aes(
+      x = DATE ,
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS,
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Month",
+    y = "kBTU's",
+    title = "PG&E Territory Monthly Commerical Electricity and Gas Usage, 
+                                  2019 & 2020",
+    fill = "Utility Type"
+  )
+
+  
+pge_chart_com2
+
+```
+
+
+The plot above more closely details the decreasing trend of commercial electric and gas use as a result of the pandemic beginning in April 2020. Compared to 2019, there are noticable decreases in use, and more variation month-by-month likely as a result of intermittent lockdowns. 
 
 ```{r}
 pge_chart_res <- 
@@ -367,7 +402,8 @@ pge_chart_res <-
   labs(
     x = "Month",
     y = "kBTU's",
-    title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 2017 to Present",
+    title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 
+                                2017 to Present",
     fill = "Utility Type"
   )
 
@@ -375,6 +411,43 @@ pge_chart_res <-
 pge_chart_res
 ```
 
+
 In terms of residential electricity and gas use across the four analysis years, there was a slight increase as a result of the pandemic. This is reasonable as there were more people working and spending extra time at home. 
 
-Key assumptions: It is assumed that the given CSV files obtained from the Pacific Gas and Electricity Company are accurate and representative of the actual trends. Also, since the values are averages, it doesn't take into account individual nuances within zipcodes.   
+```{r}
+
+pge_final_res2 <- filter(pge_final_res,YEAR %in% c("2019", "2020"))
+
+pge_chart_res2 <- 
+  pge_final_res2 %>% 
+  ggplot() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
+  geom_bar( 
+    aes(
+      x = DATE ,
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS,
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Month",
+    y = "kBTU's",
+    title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 
+                                2019 & 2020",
+    fill = "Utility Type"
+  )
+
+  
+pge_chart_res2
+
+```
+
+
+The above plot represents residential gas and electricity trends for only 2019 and 2020. As expected, there was a marginal increase in residential electricity and gas use as a result of the pandemic (beginning in April 2020). This follows the logical trend, as many people spent more time at home (ie. working). 
+
+
+
+Key assumptions: It is assumed that the given CSV files obtained from the Pacific Gas and Electricity Company are accurate and representative of the actual trends. Also, since the values are averages, it doesn't take into account individual nuances within zipcodes. Further analysis should be completed within specific zipcodes to gain a better idea of local trends.   
