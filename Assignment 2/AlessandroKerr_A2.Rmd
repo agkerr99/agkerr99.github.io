@@ -7,7 +7,7 @@ date: " Oct 5, 2021"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = F)
 knitr::opts_chunk$set(warning = F, message = F)
 ```
 
@@ -19,6 +19,7 @@ library(tigris)
 library(leaflet)
 library(censusapi)
 library(mapview)
+library(units)
 
 ```
 
@@ -56,21 +57,21 @@ dec_vars_2020 <-
 
 smc_blocks_2020 <- blocks("CA", "San Mateo", year = 2020, progress_bar = F)
 
-sc_boundary <- places("CA", progress_bar = "F") %>%
+nfo_boundary <- places("CA", progress_bar = "F") %>%
   filter(NAME == "North Fair Oaks")
 
 #FILTER SMC CENSUS DATA FOR 2020 TO ONLY SAN CARLOS
 
-sc_blocks_2020 <- smc_pop_2020 %>% 
+nfo_blocks_2020 <- smc_pop_2020 %>% 
   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
   st_as_sf() %>% 
   st_centroid() %>% 
-  .[sc_boundary, ] %>% 
+  .[nfo_boundary, ] %>% 
   st_set_geometry(NULL) %>% 
   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
   st_as_sf()
 
-mapview(sc_blocks_2020, zcol = "pop")
+#mapview(nfo_blocks_2020, zcol = "pop")
 
 ```
 
@@ -104,71 +105,147 @@ dec_vars_2010 <-
 ```{r}
 #FILTER 2010 CENSUS DATA TO ONLY SAME AS 2020 BLOCKS
 
-sc_blocks_2010 <- smc_pop_2010 %>% 
-  left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
+smc_blocks_2010 <- blocks("CA", "San Mateo", year = 2010, progress_bar = F)
+
+nfo_blocks_2010 <- smc_pop_2010 %>% 
+  left_join(smc_blocks_2010 %>% select(block = GEOID10)) %>% 
   st_as_sf() %>% 
   st_centroid() %>% 
-  .[sc_blocks_2020, ] %>% 
+  .[nfo_boundary, ] %>% 
   st_set_geometry(NULL) %>% 
-  left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
+  left_join(smc_blocks_2010 %>% select(block = GEOID10)) %>% 
   st_as_sf()
 
-mapview(sc_blocks_2010, zcol = "pop")
 
-leaflet() %>% 
-  addProviderTiles(providers$CartoDB.Positron) %>% 
-  addPolygons(
-    data = sc_blocks_2020,
-    stroke = F,
-    fillOpacity = 0.5
-  ) %>% 
-  addPolygons(
-    data = sc_blocks_2010,
-    color = "red",
-    weight = 0.75,
-    fill = F
+# sc_blocks_2010 <- smc_pop_2010 %>% 
+#   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
+#   st_as_sf() %>% 
+#   st_centroid() %>% 
+#   .[sc_blocks_2020, ] %>% 
+#   st_set_geometry(NULL) %>% 
+#   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
+#   st_as_sf()
+
+#mapview(nfo_blocks_2010, zcol = "pop")
+#mapview(nfo_blocks_2010) + mapview(nfo_blocks_2020)
+
+# leaflet() %>% 
+#   addProviderTiles(providers$CartoDB.Positron) %>% 
+#   addPolygons(
+#     data = sc_blocks_2020,
+#     stroke = F,
+#     fillOpacity = 0.5
+#   ) %>% 
+#   addPolygons(
+#     data = sc_blocks_2010,
+#     color = "red",
+#     weight = 0.75,
+#     fill = F
+#   )
+```
+
+```{r}
+#COOKIE CUTTER TO COMBINE GEOMETRY OF THE BLOCKS
+
+nfo_comb_blocks <- smc_blocks_2010[nfo_blocks_2020, ]
+
+nfo_blocks_area <- 
+  nfo_comb_blocks %>%
+  st_transform(26910) %>% 
+  mutate(area = st_area(.))
+
+nfo_blocks_int <- 
+  nfo_blocks_area %>%
+  st_intersection(
+    nfo_blocks_2010 %>% 
+        st_transform(26910)
   )
 ```
 
+```{r}
+#DISTRIBUTE POPULATION
+nfo_blocks_3 <-
+  nfo_blocks_2020 %>% 
+  st_transform(26910) %>% 
+  mutate(original_area = st_area(.)) %>% 
+  st_intersection(
+    nfo_blocks_2010 %>% 
+      st_transform(26910)
+  ) %>% 
+  mutate(
+    leftover_area = st_area(.),
+    perc_area = leftover_area / original_area,
+    pop = pop * perc_area
+  )
+
+
+
+#sum(nfo_blocks_3$pop.1*nfo_blocks_3$perc_area)
+  
+
+```
+
+```{r}
+#CLEANING UP NFO_BLOCKS_3 DATA
+nfo_clean <- nfo_blocks_3 %>%
+  group_by(block) %>% 
+  summarise(
+    pop2020 = sum(pop*perc_area),
+    pop2010 = sum(pop.1*perc_area))
+
+```
+
+
+```{r}
+#CALCULATING DENSITY CHANGE
+
+nfo_plot <- nfo_clean %>%
+  st_transform(26910) %>% 
+  mutate(area = st_area(.)) %>%
+  mutate(area = area*0.000247105) %>%
+  mutate(density = pop2020 - pop2010) %>%
+  mutate(density = density/area) %>%
+  drop_units %>%
+  filter(density>=-50) %>%
+  st_set_geometry(NULL) %>% 
+  left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
+  st_as_sf()
+  
+```
 
 
 ```{r}
 #FILTERING 2020 DATA TO ONLY INCLUDE CENTROIDS THAT EXIST IN 2010 (FILTER DOWN)
-sc_joined <- sc_blocks_2020 %>%
-  st_centroid() %>% 
-  .[sc_blocks_2010, ] %>%
-  st_set_geometry(NULL) %>% 
-  left_join(sc_blocks_2020 %>% select(block)) %>% 
-  st_as_sf() %>%
-  cbind(sc_blocks_2010$pop) %>%
-  mutate(area = st_area(.)) 
+# sc_joined <- sc_blocks_2020 %>%
+#   st_centroid() %>% 
+#   .[sc_blocks_2010, ] %>%
+#   st_set_geometry(NULL) %>% 
+#   left_join(sc_blocks_2020 %>% select(block)) %>% 
+#   st_as_sf() %>%
+#   cbind(sc_blocks_2010$pop) %>%
+#   mutate(area = st_area(.)) 
 
-sc_joined$area <- sc_joined$area*0.000247105
+# sc_joined2 <- sc_joined %>%
+#   st_set_geometry(NULL) %>%
+#   right_join(sc_blocks_2010)%>%
+#   st_as_sf() 
 
-colnames(sc_joined)[5] <- "acres"
 
-sc_joined <- sc_joined %>%
-  mutate(density = pop - sc_blocks_2010.pop) %>%
-  mutate(density = density/sc_joined$acres) %>%
-  drop_units
+
 
 
 
 ```
 
 ```{r}
-# dens_pal <- colorNumeric(
-#   palette = "Reds",
-#   domain = 
-#     sc_joined$density
-# )
+#PLOTTING
 
-dpal <- colorNumeric(palette = "Reds", domain = sc_joined$density)
+dpal <- colorNumeric(palette = "Reds", domain = nfo_plot$density)
 
 leaflet() %>%
   addProviderTiles(provider = providers$CartoDB.Positron) %>% 
-  addPolygons(
-    data = sc_joined,
+  addPolygons( 
+    data = nfo_plot,
     fillColor = ~dpal(density),
     color = "white",
     opacity = 0.5,
@@ -182,12 +259,12 @@ leaflet() %>%
       weight = 2,
       opacity = 1
     ) 
-  )%>% 
+  ) %>% 
   addLegend(
-    data = sc_joined,
+    data = nfo_plot,
     pal = dpal,
     values = ~density,
-    title = "Change in Density"
+    title = "Change in Density <br> in North Fair Oaks <br> (People per Acre) <br> Between 2010 and 2020"
   )
   
 ```
