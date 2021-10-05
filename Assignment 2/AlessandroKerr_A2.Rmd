@@ -117,15 +117,6 @@ nfo_blocks_2010 <- smc_pop_2010 %>%
   st_as_sf()
 
 
-# sc_blocks_2010 <- smc_pop_2010 %>% 
-#   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
-#   st_as_sf() %>% 
-#   st_centroid() %>% 
-#   .[sc_blocks_2020, ] %>% 
-#   st_set_geometry(NULL) %>% 
-#   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
-#   st_as_sf()
-
 #mapview(nfo_blocks_2010, zcol = "pop")
 #mapview(nfo_blocks_2010) + mapview(nfo_blocks_2020)
 
@@ -215,7 +206,7 @@ nfo_plot <- nfo_clean %>%
 
 The following map represents the change in density (persons per acre) in North Fair Oaks, California, between 2010 and 2020. This study used Decennial data for both years, and the 2010 shape-files as the basis for the mapping. Since the geometric census tract boundaries were different between 2010 and 2020, it was assumed that the area was uniformly distributed within each block. This simplifying assumption allowed both the 2010 and 2020 data to be modelled using the 2010 shape-files. From here, the population was re-distributed. One anomaly that was noticed was that several census tracts had abnormally high negative changes in density (in the hundreds per acre). This could either be attributed to high density housing being converted to retail space, or an error in the data. Nonetheless, for the sake of the map, these outliers can be noted, but were removed from the visualization. 
 
-Overall, the data revealed that there was an overall negative change in density between 2010 and 2020 in North Fair Oaks (population of 14,681 in 2010 to 14,009 in 2020). There are several reasons that could explain this trend: (1) High density residential properties could be converted to commerical or industrial properties, (2) Multi-family housing could be torn down and replaced with larger single-family homes, (3) Lack of complete dataset in the 2020 census. 
+Overall, the data revealed that there was an overall negative change in density between 2010 and 2020 in North Fair Oaks (population of 14,681 in 2010 to 14,009 in 2020). There are several reasons that could explain this trend: (1) High density residential properties could be converted to commerical or industrial properties, (2) Multi-family housing could be torn down and replaced with larger single-family homes, (3) Lack of complete dataset in the 2020 census, or (4) perhaps people are just moving to other parts of the Bay Area.
 
 Nonetheless, this was a useful exercise in using R to map and model changes in census data. Please see the outputted graph below. 
 
