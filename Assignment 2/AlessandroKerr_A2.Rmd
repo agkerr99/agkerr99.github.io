@@ -103,7 +103,7 @@ dec_vars_2010 <-
 ```
 
 ```{r}
-#FILTER 2010 CENSUS DATA TO ONLY SAME AS 2020 BLOCKS
+#FILTER 2010 CENSUS DATA TO NFO BOUNDARIES
 
 smc_blocks_2010 <- blocks("CA", "San Mateo", year = 2010, progress_bar = F)
 
@@ -145,9 +145,9 @@ nfo_blocks_2010 <- smc_pop_2010 %>%
 ```
 
 ```{r}
-#COOKIE CUTTER TO COMBINE GEOMETRY OF THE BLOCKS
+#COOKIE CUTTER METHOD TO COMBINE GEOMETRY OF THE BLOCKS
 
-nfo_comb_blocks <- smc_blocks_2010[nfo_blocks_2020, ]
+nfo_comb_blocks <- smc_blocks_2010[nfo_blocks_2010, ]
 
 nfo_blocks_area <- 
   nfo_comb_blocks %>%
@@ -213,29 +213,14 @@ nfo_plot <- nfo_clean %>%
   
 ```
 
+The following map represents the change in density (persons per acre) in North Fair Oaks, California, between 2010 and 2020. This study used Decennial data for both years, and the 2010 shape-files as the basis for the mapping. Since the geometric census tract boundaries were different between 2010 and 2020, it was assumed that the area was uniformly distributed within each block. This simplifying assumption allowed both the 2010 and 2020 data to be modelled using the 2010 shape-files. From here, the population was re-distributed. One anomaly that was noticed was that several census tracts had abnormally high negative changes in density (in the hundreds per acre). This could either be attributed to high density housing being converted to retail space, or an error in the data. Nonetheless, for the sake of the map, these outliers can be noted, but were removed from the visualization. 
 
-```{r}
-#FILTERING 2020 DATA TO ONLY INCLUDE CENTROIDS THAT EXIST IN 2010 (FILTER DOWN)
-# sc_joined <- sc_blocks_2020 %>%
-#   st_centroid() %>% 
-#   .[sc_blocks_2010, ] %>%
-#   st_set_geometry(NULL) %>% 
-#   left_join(sc_blocks_2020 %>% select(block)) %>% 
-#   st_as_sf() %>%
-#   cbind(sc_blocks_2010$pop) %>%
-#   mutate(area = st_area(.)) 
+Overall, the data revealed that there was an overall negative change in density between 2010 and 2020 in North Fair Oaks (population of 14,681 in 2010 to 14,009 in 2020). There are several reasons that could explain this trend: (1) High density residential properties could be converted to commerical or industrial properties, (2) Multi-family housing could be torn down and replaced with larger single-family homes, (3) Lack of complete dataset in the 2020 census. 
 
-# sc_joined2 <- sc_joined %>%
-#   st_set_geometry(NULL) %>%
-#   right_join(sc_blocks_2010)%>%
-#   st_as_sf() 
+Nonetheless, this was a useful exercise in using R to map and model changes in census data. Please see the outputted graph below. 
 
 
 
-
-
-
-```
 
 ```{r}
 #PLOTTING
@@ -270,194 +255,4 @@ leaflet() %>%
 ```
 
 
-
-```{r}
-# #CALC CHANGE IN DENSITY
-# 
-# 
-# sc_density <- sc_joined %>%
-#   mutate(sc_blocks_2010 %>%
-#            )
-```
-
-
-```{r}
-# #JOIN 2010 and 2020 data w/ different boundaries for each tract
-# smc_join_blocks <- 
-#   smc_blocks_2020 %>%
-#   select(block = GEOID20) %>%
-#   left_join(smc_pop_2020) %>%
-#   st_transform(26910) %>% 
-#   mutate(original_area = st_area(.)) %>% 
-#   st_intersection(
-#     sc_blocks_2010 %>% 
-#       st_transform(26910)
-#   ) %>% 
-#   mutate(
-#     leftover_area = st_area(.),
-#     perc_area = leftover_area / original_area,
-#     pop = pop * perc_area
-#   )
-
-```
-
-
-
-
-```{r}
-# #smc_pop_race_2020 <-
-#   getCensus(
-#     name = "dec/pl",
-#     vintage = 2020,
-#     region = "block:*", 
-#     regionin = "state:06+county:081",
-#     vars = "group(P1)"
-#   ) %>% 
-#   mutate(
-#     block =
-#       paste0(state,county,tract,block)
-#   ) %>% 
-#   select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>% 
-#   pivot_longer(
-#     ends_with("N"),
-#     names_to = "name",
-#     values_to = "estimate"
-#   ) %>%
-#   left_join(
-#     dec_vars_2020 %>% 
-#       select(name, label)
-#   ) %>% 
-#   select(-name) %>% 
-#   separate(
-#     label,
-#     into = c(NA,NA,"category1","category2"),
-#     sep = "!!"
-#   ) %>%
-#   filter(!is.na(age))
-# 
-# #smc_pop_race_2020 <- smc_pop_race_2020 %>% 
-#   mutate(
-#     race = case_when(
-#       category1 == "Population of two or more races:" & is.na(category2) ~ "Two or more races",
-#       category1 == "Population of two or more races:" ~ "",
-#       !is.na(category2) ~ category2,
-#       TRUE ~ ""
-#     )
-#   )
-# 
-# #smc_pop_race_2020 <- smc_pop_race_2020 %>% 
-#   filter(race != "") %>% 
-#   select(block, race, pop = estimate)
-# 
-# #smc_pop_race_2010 <-
-#   getCensus(
-#     name = "dec/pl",
-#     vintage = 2010,
-#     region = "block:*", 
-#     regionin = "state:06+county:081",
-#     vars = "group(P1)"
-#   ) %>% 
-#   mutate(
-#     block =
-#       paste0(state,county,tract,block)
-#   ) %>% 
-#   select(!c(GEO_ID,state,county,tract,NAME)) %>% 
-#   pivot_longer(
-#     starts_with("P"),
-#     names_to = "name",
-#     values_to = "estimate"
-#   ) %>%
-#   left_join(
-#     dec_vars_2010 %>% 
-#       select(name, label)
-#   ) %>% 
-#   select(-name) %>% 
-#   separate(
-#     label,
-#     into = c(NA,NA,"category1","category2"),
-#     sep = "!!"
-#   )
-# ```
-# 
-# ```{r}
-# smc_pop_race_2010 <- smc_pop_race_2010 %>% 
-#   mutate(
-#     race = case_when(
-#       category1 == "Population of two or more races:" & is.na(category2) ~ "Two or more races",
-#       category1 == "Population of two or more races:" ~ "",
-#       !is.na(category2) ~ category2,
-#       TRUE ~ ""
-#     )
-#   )
-# 
-# smc_pop_race_2010 <- smc_pop_race_2010 %>% 
-#   filter(race != "") %>% 
-#   select(block, race, pop = estimate)
-```
-
-```{r}
-# mp_boundary <- places("CA", progress_bar = F) %>% 
-#   filter(NAME == "Menlo Park")
-# 
-# mp_pop_2020 <- smc_pop_2020 %>% 
-#   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
-#   st_as_sf() %>% 
-#   st_centroid() %>% 
-#   .[mp_boundary, ] %>% 
-#   st_set_geometry(NULL) %>% 
-#   left_join(smc_blocks_2020 %>% select(block = GEOID20)) %>% 
-#   st_as_sf()
-```
-
-```{r}
-
-```
-
-```{r}
-# mp_blocks_2020 <- smc_blocks_2020[smc_pdas, ]
-# 
-# mp_blocks_area <- 
-#    %>% 
-#   st_transform(26910) %>% 
-#   mutate(area = st_area(.))
-# 
-# #smc_census_blocks <- smc_blocks_2020[mp_blocks_area, ]
-# 
-# smc_pop_race_2010_2 <-
-#   getCensus(
-#     name = "dec/pl",
-#     vintage = 2010,
-#     region = "block:*", 
-#     regionin = "state:06+county:081",
-#     vars = "group(P1)"
-#   ) %>% 
-#   mutate(
-#     block =
-#       paste0(state,county,tract,block)
-#   ) %>% 
-#   select(!c(state,county,tract,NAME)) %>% 
-#   pivot_longer(
-#     starts_with("P"),
-#     names_to = "name",
-#     values_to = "estimate"
-#   ) %>%
-#   left_join(
-#     dec_vars_2010 %>% 
-#       select(name, label)
-#   ) %>% 
-#   select(-name) %>% 
-#   separate(
-#     label,
-#     into = c(NA,NA,"category1","category2"),
-#     sep = "!!") %>%
-#   select(-estimate, -category1,-category2)
-# 
-# 
-# mp_pop_2010 <-
-#   mp_blocks_area %>%
-#   st_intersection(
-#     smc_pop_race_2010_2 %>% 
-#       st_transform(26910)
-#   )
-```
 
