@@ -1,7 +1,7 @@
 ---
-title: "Assignment 1"
+title: "Assignment 1 - Resubmisssion"
 author: "Alessandro Kerr"
-date: " Sept 26, 2021"
+date: " Oct 7, 2021"
 output: html_document
 ---
 
@@ -16,10 +16,23 @@ library(sf)
 library(tigris)
 library(leaflet)
 library(censusapi)
+library(lubridate)
 
 pge_elec_all <- NULL
 
 ```
+
+```{r}
+pge_duplicates <- read_csv("PGE_2017_Q4_ElectricUsageByZip.csv") %>%
+  filter(MONTH != 9) %>%
+  write_csv("PGE_2017_Q4_ElectricUsageByZip.csv")
+
+pge_duplicates2 <- read_csv("PGE_2017_Q4_GasUsageByZip.csv") %>%
+  filter(MONTH != 9) %>%
+  write_csv("PGE_2017_Q4_GasUsageByZip.csv")
+
+```
+
 
 ```{r}
 year <- 2017:2020
@@ -245,6 +258,7 @@ pge_select4 <-
 
 ```
 
+
 ```{r}
 # numbers <- 1:4
 # for (number in numbers) {
@@ -312,7 +326,9 @@ DATE = NULL
   pge_final_com <- rbind(pge_mutate, pge_mutate3)
   pge_final_res <- rbind(pge_mutate2, pge_mutate4)
   
+ # Must remove duplicate September 2017 electric commerical instances
   
+
   
 # }
  
@@ -347,6 +363,8 @@ pge_chart_com
 
 ```
 
+Firstly, it should be noted that in 2017 there was an outlier removed: the commerical data included the month of September in both the Q3 and Q4 files. This duplicate data was removed in order to ensure the plots are consistent with the actual utility usage.
+
 There are noticable differences between the Commerical utility use, notably electricity, during the COVID pandemic. In April 2020, a sharp decrease in commerical electricity use can be seen on the above chart. These trend can be seen in more detail below, where only 2019 and 2020 are plotted: 
 
 
@@ -354,43 +372,70 @@ There are noticable differences between the Commerical utility use, notably elec
 
 pge_final_com2 <- filter(pge_final_com, YEAR %in% c("2019", "2020"))
 
-pge_chart_com2 <- 
-  pge_final_com2 %>% 
-  ggplot() + 
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
-  geom_bar( 
-    aes(
-      x = DATE ,
-      y = TOTALKBTU,
-      fill = CUSTOMERCLASS,
-    ),
-    stat = "identity",
-    position = "stack"
-  ) +
-  labs(
-    x = "Month",
-    y = "kBTU's",
-    title = "PG&E Territory Monthly Commerical Electricity and Gas Usage, 
-                                  2019 & 2020",
-    fill = "Utility Type"
-  )
+pge_final_com2 <- pge_final_com2 %>%
+  group_by(DATE, CUSTOMERCLASS) %>%
+  summarize(TOTALKBTU =
+              sum(
+        TOTALKBTU, 
+        na.rm = T
+      ))  %>%
+  mutate(MONTH = month(as.POSIXlt(DATE, format="%d/%m/%Y"))) %>%
+  mutate(YEAR = year(as.POSIXlt(DATE, format="%d/%m/%Y")))
 
-  
-pge_chart_com2
+pge_plot_2019_com <- pge_final_com2 %>%
+  filter(YEAR == 2019)
+pge_plot_2020_com <- pge_final_com2 %>%
+  filter(YEAR == 2020)
+
+ggplot()+   
+  geom_line(data = pge_plot_2019_com, aes(x = MONTH, y = TOTALKBTU, color = CUSTOMERCLASS)) +
+  geom_line(data = pge_plot_2020_com, aes(x = MONTH, y = TOTALKBTU, linetype = CUSTOMERCLASS)) +
+  geom_point() +
+  labs(x = "Month",
+       y = "kBTU's",
+       title = "PG&E Territory Monthly Residential Electricity and Gas Usage,
+                                2019 & 2020",
+       color = "2019",
+       linetype = "2020")
+
+
+# pge_chart_com2 <- 
+#   pge_final_com2 %>% 
+#   ggplot() + 
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+#   scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
+#   geom_bar( 
+#     aes(
+#       x = DATE ,
+#       y = TOTALKBTU,
+#       fill = CUSTOMERCLASS,
+#     ),
+#     stat = "identity",
+#     position = "stack"
+#   ) +
+#   labs(
+#     x = "Month",
+#     y = "kBTU's",
+#     title = "PG&E Territory Monthly Commerical Electricity and Gas Usage, 
+#                                   2019 & 2020",
+#     fill = "Utility Type"
+#   )
+# 
+#   
+# pge_chart_com2
 
 ```
 
 
-The plot above more closely details the decreasing trend of commercial electric and gas use as a result of the pandemic beginning in April 2020. Compared to 2019, there are noticable decreases in use, and more variation month-by-month likely as a result of intermittent lockdowns. 
+The plot above more closely details the decreasing trend of commercial electric and gas use as a result of the pandemic beginning in April 2020. Compared to 2019, there are noticable decreases in use, and more variation month-by-month likely as a result of intermittent lockdowns. Line charts were used to more closely show the trends for the direct comparisons as a result of the pandemic. 
 
 ```{r}
-pge_chart_res <- 
-  pge_final_res %>% 
-  ggplot() + 
+pge_chart_res <-
+  pge_final_res %>%
+  ggplot() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
-  geom_bar( 
+  geom_bar(
     aes(
       x = DATE,
       y = TOTALKBTU,
@@ -402,12 +447,11 @@ pge_chart_res <-
   labs(
     x = "Month",
     y = "kBTU's",
-    title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 
+    title = "PG&E Territory Monthly Residential Electricity and Gas Usage,
                                 2017 to Present",
     fill = "Utility Type"
   )
 
-  
 pge_chart_res
 ```
 
@@ -415,38 +459,58 @@ pge_chart_res
 In terms of residential electricity and gas use across the four analysis years, there was a slight increase as a result of the pandemic. This is reasonable as there were more people working and spending extra time at home. 
 
 ```{r}
-
 pge_final_res2 <- filter(pge_final_res,YEAR %in% c("2019", "2020"))
 
-pge_chart_res2 <- 
-  pge_final_res2 %>% 
-  ggplot() + 
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  scale_x_date(date_breaks = "1 month", date_labels = "%b-%y") +
-  geom_bar( 
-    aes(
-      x = DATE ,
-      y = TOTALKBTU,
-      fill = CUSTOMERCLASS,
-    ),
-    stat = "identity",
-    position = "stack"
-  ) +
-  labs(
-    x = "Month",
-    y = "kBTU's",
-    title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 
+pge_final_res2 <- pge_final_res2 %>%
+  group_by(DATE, CUSTOMERCLASS) %>%
+  summarize(TOTALKBTU =
+              sum(
+        TOTALKBTU, 
+        na.rm = T
+      ))  %>%
+  mutate(MONTH = month(as.POSIXlt(DATE, format="%d/%m/%Y"))) %>%
+  mutate(YEAR = year(as.POSIXlt(DATE, format="%d/%m/%Y")))
+
+pge_plot_2019 <- pge_final_res2 %>%
+  filter(YEAR == 2019)
+pge_plot_2020 <- pge_final_res2 %>%
+  filter(YEAR == 2020)
+
+ggplot()+   
+  geom_line(data = pge_plot_2019, aes(x = MONTH, y = TOTALKBTU, color = CUSTOMERCLASS)) +
+  geom_line(data = pge_plot_2020, aes(x = MONTH, y = TOTALKBTU, linetype = CUSTOMERCLASS)) +
+  geom_point() +
+  labs(x = "Month",
+       y = "kBTU's",
+       title = "PG&E Territory Monthly Residential Electricity and Gas Usage,
                                 2019 & 2020",
-    fill = "Utility Type"
-  )
+       color = "2019",
+       linetype = "2020")
+         
+
+# pge_chart_res2 <- 
+#   pge_final_res2 %>% 
+#   ggplot(aes(
+#       x = DATE ,
+#       y = TOTALKBTU,
+#       color = CUSTOMERCLASS)) +
+#   geom_line() +
+#   geom_point() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+#   scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+#   labs(
+#     x = "Month",
+#     y = "kBTU's",
+#     title = "PG&E Territory Monthly Residential Electricity and Gas Usage, 
+#                                 2019 & 2020",
+#   )
 
   
-pge_chart_res2
 
 ```
 
 
-The above plot represents residential gas and electricity trends for only 2019 and 2020. As expected, there was a marginal increase in residential electricity and gas use as a result of the pandemic (beginning in April 2020). This follows the logical trend, as many people spent more time at home (ie. working). 
+The above plot represents residential gas and electricity trends for only 2019 and 2020. As expected, there was a marginal increase in residential electricity and gas use as a result of the pandemic (beginning in April 2020). This follows the logical trend, as many people spent more time at home (ie. working). Line charts were used to more closely show the trends for the direct comparisons as a result of the pandemic. 
 
 
 
