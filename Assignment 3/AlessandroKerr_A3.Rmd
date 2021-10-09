@@ -1,0 +1,190 @@
+---
+title: "Assignment 3"
+author: "Alessandro Kerr"
+date: " Oct 12, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+library(lubridate)
+```
+
+```{r}
+#IMPORT PUMS DATA
+
+Sys.setenv(CENSUS_KEY="0f0e2bffc9d96d5405bcb932e25318a4edb32602")
+
+temp <- tempfile()
+download.file("https://www2.census.gov/programs-surveys/acs/data/pums/2019/1-Year/csv_hca.zip",destfile = temp)
+
+pums_hca_2019_1yr <- read_csv(unzip(temp,"psam_h06.csv"))
+
+unlink(temp)
+```
+
+```{r}
+# GET PUMS CENSUS DATA FOR SPECIFIC VARIABLES
+
+pums_2019_1yr <- getCensus(
+  name = "acs/acs1/pums",
+  vintage = 2019,
+  region = "public use microdata area:*", 
+  regionin = "state:06",
+  vars = c(
+    "SERIALNO",
+    "SPORDER",
+    "PWGTP",
+    "WGTP",
+    "NP",
+    "HHL",
+    "HINCP",
+    "TEN",
+    "R65" ,
+    "HUPAC"
+  )
+)
+```
+
+```{r}
+# GET PUMAS, FILTER FOR BAY AREA
+
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+```
+
+```{r}
+bay_counties <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME %in% bay_county_names)
+
+bay_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[bay_counties, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+
+bay_pums <-
+  pums_2019_1yr %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% bay_pumas$PUMACE10)
+```
+
+```{r}
+bay_pums_heatrisk<-
+  bay_pums %>%
+  filter(!duplicated(SERIALNO)) %>%
+  mutate(
+    WGTP = as.numeric(WGTP),
+    elderly_or_children = ifelse(
+      (R65 == 1) | (R65 == 2) | (HUPAC == 1), 
+      WGTP,
+      0
+    )
+  ) %>%
+  group_by(PUMA) %>%
+  summarize( perc_elderly_or_children = 
+               sum(elderly_or_children, na.rm= T)/sum(WGTP, na.rm = T)*100
+  ) %>%
+  left_join(
+    bay_pumas %>%
+      select(PUMACE10),
+    by = c("PUMA" = "PUMACE10") 
+  ) %>%
+    st_as_sf()
+  
+
+```
+
+```{r}
+# PLOT
+
+pums_pal <- colorNumeric(
+  palette = "Purples",
+  domain = bay_pums_heatrisk$perc_elderly_or_children
+)
+```
+
+
+The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditions, age was chosen as the factor to consider in more detail. As a result, households were filtered for those who had elderly people (age 65+), or young people (under age 6). Please see the map characterizing the Bay Area based on the percentage of households with elderly people or young children (at an elevated risk for extreme-heat impacts).
+
+```{r}
+leaflet() %>%
+  addTiles() %>% 
+  addPolygons(
+    data = bay_pums_heatrisk,
+    fillColor = ~pums_pal(perc_elderly_or_children),
+    color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.5,
+    weight = 1,
+    label = ~paste0(
+      round(perc_elderly_or_children), 
+      "% Households with elderly persons or children (at elevated risk for heat-extreme impacts)"
+    ),
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
+  ) %>% 
+  addLegend(
+    data = bay_pums_heatrisk,
+    pal = pums_pal,
+    values = ~perc_elderly_or_children,
+    title = "% Households with elderly <br> persons or children <br> (at elevated risk for <br> heat-extreme impacts)"
+  )
+
+
+```
+
+
+The total amount of households in the Bay Area related to the vulnerability to heat-extreme events can be seen below.
+ 
+
+```{r}
+#TOTAL HOUSEHOLDS AT RISK FOR HEAT-RELATED ILLNESSES
+
+sum_bay_pumas <- bay_pums %>%
+  filter(!duplicated(SERIALNO)) %>%
+  mutate(
+    WGTP = as.numeric(WGTP),
+    elderly_or_children = ifelse(
+      (R65 == 1) | (R65 == 2) | (HUPAC == 1), 
+      WGTP,
+      0
+    )
+  ) 
+sum(sum_bay_pumas$elderly_or_children, na.rm = T)
+
+```
+
+
+One key assumption relating to the production of this plot is that every young child or elderly person is at a higher-risk for extreme-heat impacts. While this may not be true for every case, it represents a group that would be expected to have a higher likelihood of being affected by extreme heat. 
+
+This map is certainly useful in gaining broad, general trends relating to the Bay Area. However, there are also flaws relating to the plot. When extremely large area boundaries and populations are grouped, it may cause some of the intricacies to be missed. For example, a plot like this may be useful in targeting support to certain neighbourhoods. However, when the area boundaries are so large, it may overlook certain neighbourhoods that are more susceptible to these effects. More detailed data would allow for social programs, targeted information, and community support to be more narrowly directed. Nonetheless, this plot is useful in visualizing the trends across a very large area. 
