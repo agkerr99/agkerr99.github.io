@@ -99,7 +99,7 @@ bay_pums <-
 ```{r}
 bay_pums_heatrisk<-
   bay_pums %>%
-  filter(!duplicated(SERIALNO)) %>%
+  # filter(!duplicated(SERIALNO)) %>%
   mutate(
     WGTP = as.numeric(WGTP),
     elderly_or_children = ifelse(
@@ -132,7 +132,7 @@ pums_pal <- colorNumeric(
 ```
 
 
-The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditioning, age was chosen as the factor to consider in more detail. As a result, households were filtered for those who had elderly people (age 65+), or young people (under age 6). See the map below characterizing the Bay Area based on the percentage of households with elderly people or young children (at an elevated risk for extreme-heat impacts).
+The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditioning, age was chosen as the factor to consider in more detail. As a result, residents were filtered for those who were elderly people (age 65+), or young people (under age 6). See the map below characterizing the Bay Area based on the percentage of elderly people or young children (at an elevated risk for extreme-heat impacts).
 
 ```{r}
 leaflet() %>%
@@ -146,7 +146,7 @@ leaflet() %>%
     weight = 1,
     label = ~paste0(
       round(perc_elderly_or_children), 
-      "% Households with elderly persons or children (at elevated risk for heat-extreme impacts)"
+      "%Elderly persons or children (at elevated risk for heat-extreme impacts)"
     ),
     highlightOptions = highlightOptions(
       weight = 2,
@@ -157,21 +157,21 @@ leaflet() %>%
     data = bay_pums_heatrisk,
     pal = pums_pal,
     values = ~perc_elderly_or_children,
-    title = "% Households with elderly <br> persons or children <br> (at elevated risk for <br> heat-extreme impacts)"
+    title = "% Elderly persons or <br> children (at elevated risk for <br> heat-extreme impacts)"
   )
 
 
 ```
 
 
-The total amount of households in the Bay Area related to the vulnerability to heat-extreme events can be seen below.
+The total amount of people in the Bay Area related to the vulnerability to heat-extreme events can be seen below.
  
 
 ```{r}
 #TOTAL HOUSEHOLDS AT RISK FOR HEAT-RELATED ILLNESSES
 
 sum_bay_pumas <- bay_pums %>%
-  filter(!duplicated(SERIALNO)) %>%
+  # filter(!duplicated(SERIALNO)) %>%
   mutate(
     WGTP = as.numeric(WGTP),
     elderly_or_children = ifelse(
