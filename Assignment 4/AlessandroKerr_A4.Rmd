@@ -35,6 +35,8 @@ acs_vars_2019_5yr <-
 
 # 6-POINT WORK
 
+In the first section, an equity analysis of educational attainment was completed for Santa Clara County. The data stemmed from 2019 ACS 5-year summary data. The C15002 group of data was used across all races, which is "sex by educational attainment for the population 25 years and older". For this purpose, the sex data was ignored. The results for the "stacked" and "filled" chart can be seen below. 
+
 ```{r}
 #Import data and tidy to estimates within each education type - need to repeat for all races
 
@@ -110,7 +112,7 @@ sc_edu %>%
     x = "Educational Attainment",
     y = "Number of Population 25 years or Older",
     title = "Santa Clara Educational Attainment by Race",
-    fill = "Race of householder"
+    fill = "Race of person"
   ) +
   coord_flip() +
   theme(
@@ -142,7 +144,7 @@ sc_edu %>%
     x = "Educational Attainment",
     y = "Proportion of Population 25 years or Older",
     title = "Santa Clara Educational Attainment by Race",
-    fill = "Race of householder"
+    fill = "Race of person"
   ) +
   coord_flip() +
   theme(
@@ -156,14 +158,17 @@ sc_edu %>%
 ```
 
 
+There are several takeaways from the above charts pertaining to the over- and under-representation of racial groups. Firstly, based on the "stacked" chart, the majority of educational attainment lies within the "White" and "Asian" populations. The "filled" chart gives a better idea of races with low total representation through the use of percentages. In particular, it gives better ideas relating to the over- and under-representation of groups. In the "stacked" chart, the white group looks over represented. However, upon further analysis of the "filled" chart, the "Bachelor's degree category is actually very close to the same percentage of total education, much like many of the "white" categories. Conversely, it can be seen that "Asian" race is over-represented for Bachelor's degrees. Whereas "some other race" is over-represented in "less than highschool" and under-represented in "Bachelor's degrees". 
+
 #6.5 POINT WORK
 
+The next task related to completing a similar analysis but breaking down the races into "Latinx", "White, Not Latinx", and "Not White, Not LatinX". Using these three categories allowed for data to be switched from ACS 5-year to 1-year data. The results for the "filled" and "stacked" charts can be seen below. 
 
 ```{r}
 census_race_categories2 <- 
   c("","","","","","","", 
-    "Latinx",
-    "White, not latinx"
+    "White, not latinx",
+    "LatinX"
   )
 
 sc_edu2 <- 
@@ -285,7 +290,7 @@ sc_edu2 %>%
   ggplot() +
   geom_bar(
     aes(
-      x = education %>% factor(levels = rev(c("Total",unique(sc_edu2$education)))),
+      x = education %>% factor(levels = (c(unique(sc_edu2$education), "Total"))),
       y = estimate,
       fill = race %>% factor(levels = rev(unique(sc_edu2$race)))
       ),
@@ -320,7 +325,7 @@ sc_edu2 %>%
   ggplot() +
   geom_bar(
     aes(
-      x = education %>% factor(levels = rev(c("Total",unique(sc_edu2$education)))),
+      x = education %>% factor(levels = (c(unique(sc_edu2$education),"Total"))),
       y = estimate,
       fill = race %>% factor(levels = rev(unique(sc_edu2$race)))
       ),
@@ -345,7 +350,11 @@ sc_edu2 %>%
 ```
 
 
+After viewing the two plots above outlining the educational attainment by ethnicity, different results can be seen. It is clear that there is an under-representation of "Latinx" holding Bachelor's degrees, and an over-representation in every lower educational attainment category. Similar to the plots in part one, it can be seen that the "Asian" group is over-represented in Bachelor's degrees, while the "White" group is fairly well-distributed. 
+
 #7-POINT WORK
+
+Finally, the last task expanded the ethnicity analysis to all counties in the Bay Area, and to the years 2006-2019. The goal of this section was to plot the over-representation of the LatinX population (over 25 years old) who have no college degree. This required obtaining the LatinX data, and filtering for those who have not received a college degree. From here, the total number of people who have no college degree was determined; allowing for the ratio of LatinX/Total population who have no college degree. Lastly, the percent of LatinX people in the population was determined. This allowed for the two percentages to be compared to determine the over-representation of LatinX people who have no college degree. The data was plotted for the years 2006-2019 for each county in the Bay Area. 
 
 ```{r}
 
@@ -643,7 +652,20 @@ latin_bind_total <-
 plot_total <- latin_bind_total %>%
   left_join(no_college_25) %>%
   mutate(overrep = perc/perc_total) %>%
-  select(county,year,overrep)
+  select(county,year,overrep) %>%
+  mutate(county = 
+           case_when(
+             county == "001" ~ "Alameda",
+             county == "013" ~ "Contra Costa",
+             county == "041" ~ "Marin",
+             county == "055" ~ "Napa",
+             county == "075" ~ "San Francisco",
+             county == "081" ~ "San Mateo",
+             county == "085" ~ "Santa Clara",
+             county == "095" ~ "Solano",
+             county == "097" ~ "Sonoma"
+           ))
+
 
 ```
 
@@ -661,3 +683,5 @@ ggplot()+
 
 ```
 
+
+Many of the counties have a clear over-representation of LatinX population with no college degree. This can be seen as all the counties for the years between 2006 to 2019 have values larger than 1.0 for the over-representation relative to the percent Latinx in the overall population. In particular, Marin county stands out, as it is almost two-times higher than the rest of the counties. In all, all three tasks in this assignment were useful in developing skills to outline equity analysis based on census data.
