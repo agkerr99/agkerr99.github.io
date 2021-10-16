@@ -154,6 +154,8 @@ sc_edu %>%
       reverse = T)
   )
 ```
+
+
 #6.5 POINT WORK
 
 
@@ -203,23 +205,70 @@ sc_edu_total2 <-
   group_by(education) %>%
   summarize(estimate = sum(estimate))
 
+# sc_edu_total2 <- getCensus(
+#     name = "acs/acs5",
+#     vintage = 2019,
+#     region = "county:085", 
+#     regionin = "state:06",
+#     vars = "group(B15002)"
+#    ) %>%
+#   select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+#   pivot_longer(
+#     ends_with("E"),
+#     names_to = "name",
+#     values_to = "estimate"
+#   ) %>%
+#   left_join(
+#     acs_vars_2019_5yr %>% 
+#       select(name, label)
+#   ) %>% 
+#   select(-name) %>% 
+#   separate(
+#     label,
+#     into = c(NA,NA,NA,"education"),
+#     sep = "!!"
+#   ) %>% 
+#   filter(!is.na(education))%>%
+#   mutate(race = "Total") %>%
+#   select(-county)
+# 
+# sc_edu_total2 <-
+#   sc_edu_total2 %>%
+#   mutate(estimate2 = NA)
+# 
+# sc_edu_total2$estimate2[1] = sum(sc_edu_total2$estimate[1:8],sc_edu_total2$estimate[17:24])
+# sc_edu_total2$estimate2[2] = sum(sc_edu_total2$estimate[9], sc_edu_total2$estimate[25])
+# sc_edu_total2$estimate2[3] = sum(sc_edu_total2$estimate[10:12], sc_edu_total2$estimate[26:28])
+# sc_edu_total2$estimate2[4] = sum(sc_edu_total2$estimate[13:16], sc_edu_total2$estimate[29:32])
+# 
+# sc_edu_total2$education[1:4] = c("Less than high school diploma", "High school graduate (includes equivalency)", "Some college or associate's degree", "Bachelor's degree or higher" )
+# 
+# sc_edu_total2 <- 
+#   sc_edu_total2 %>%
+#   mutate(estimate = estimate2) %>%
+#   select(-estimate2) %>%
+#   filter(row_number() %in% 1:4)
+
 #total education minus sum of latinX & White, not Latinx
+
 not_white_latin <- sc_edu2 %>%
   group_by(education) %>%
-  summarize(estimate = sum(estimate)) %>%
+  summarize(estimate = sum(estimate))
+
+not_white_latin_bind <-
+  not_white_latin %>%
   mutate(estimate = sc_edu_total2$estimate - not_white_latin$estimate) %>%
   mutate(race = "Not White, Not LatinX") 
 
 #bind the two
 sc_edu2 <- sc_edu2 %>%
-  rbind(not_white_latin) %>%
+  rbind(not_white_latin_bind) %>%
   group_by(education, race) %>%
   summarize(estimate = sum(estimate))
 
 #Get Total's - need to split up into latin x, white, none classifiers
 
-          
-  )
+
 
 ```
 
@@ -293,5 +342,322 @@ sc_edu2 %>%
     fill = guide_legend(
       reverse = T)
   )
+```
+
+
+#7-POINT WORK
+
+```{r}
+
+#GET LATINX NO COLLEGE OVER 25
+
+acs_vars_2006_5yr <-
+  listCensusMetadata(
+    name = "2006/acs/acs1",
+    type = "variables"
+  )
+
+all_edu_latin <- 
+  2006:2009 %>%
+  map_dfr(function(x){
+  getCensus(
+    name = "acs/acs1",
+    vintage = x,
+    region = "county:001,013,041,055,075,081,085,095,097",
+    regionin = "state:06",
+    vars = "group(C15002I)"
+  ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  )  %>%
+  left_join(
+    acs_vars_2006_5yr %>% 
+      select(name, label)
+  ) %>%
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,NA,"education"),
+    sep = "!!"
+  ) %>% 
+  filter(!is.na(education)) %>%
+  mutate(race = "LatinX") %>%
+  mutate(year = x) %>%
+      filter(education == 
+               c("Less than high school diploma","High school graduate (includes equivalency)")) %>%
+      group_by(county, year) %>%
+      summarize(estimate = sum(estimate))
+  })
+                  
+all_edu_latin2 <- 
+  2010:2019 %>%
+  map_dfr(function(x){
+  getCensus(
+    name = "acs/acs5",
+    vintage = x,
+    region = "county:001,013,041,055,075,081,085,095,097",
+    regionin = "state:06",
+    vars = "group(C15002I)"
+  ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  )  %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label)
+  ) %>%
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,NA,"education"),
+    sep = "!!"
+  ) %>% 
+  filter(!is.na(education)) %>%
+  mutate(race = "LatinX") %>%
+  mutate(year = x) %>%
+      filter(education == 
+               c("Less than high school diploma","High school graduate (includes equivalency)")) %>%
+      group_by(county, year) %>%
+      summarize(estimate = sum(estimate))
+  })
+
+no_college_25_latin <- all_edu_latin %>%
+  rbind(all_edu_latin2) %>%
+  rename(Latin = estimate) 
+
+```
+
+```{r}
+#GET OVERALL % NO COLLEGE EACH YEAR
+census_race_categories <- 
+  c(
+    "White Alone",
+    "Black or African American",
+    "American Indian and Alaska Native Alone",
+    "Asian Alone",
+    "Native Hawaiian and Other Pacific Islander Alone",
+    "Some Other Race Alone",
+    "Two or More Races"
+  )
+
+all_total_7 <- 
+  1:7 %>%
+  map_dfr(function(x){
+    2006:2009 %>%
+      map_dfr(function(y){
+   getCensus(
+    name = "acs/acs1",
+    vintage = y,
+    region = "county:001,013,041,055,075,081,085,095,097", 
+    regionin = "state:06",
+    vars = paste0("group(C15002", LETTERS[x], ")")
+   ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2006_5yr %>% 
+      select(name, label)
+  ) %>% 
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,NA,"education"),
+    sep = "!!"
+  ) %>% 
+  filter(!is.na(education)) %>%
+  mutate(race = census_race_categories[x]) %>%
+      mutate(year = y) %>%
+      filter(education == 
+               c("Less than high school diploma","High school graduate (includes equivalency)")) %>%
+      group_by(county, year) %>%
+      summarize(estimate = sum(estimate))
+})})
+
+
+all_total_7 <- all_total_7 %>%
+  group_by(county,year) %>%
+  summarize(estimate = sum(estimate, na.rm = T))
+
+census_race_categories <- 
+  c(
+    "White Alone",
+    "Black or African American",
+    "American Indian and Alaska Native Alone",
+    "Asian Alone",
+    "Native Hawaiian and Other Pacific Islander Alone",
+    "Some Other Race Alone",
+    "Two or More Races"
+  )
+
+all_total_7_2 <- 
+  1:7 %>%
+  map_dfr(function(x){
+    2010:2019 %>%
+      map_dfr(function(y){
+   getCensus(
+    name = "acs/acs5",
+    vintage = y,
+    region = "county:001,013,041,055,075,081,085,095,097", 
+    regionin = "state:06",
+    vars = paste0("group(C15002", LETTERS[x], ")")
+   ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label)
+  ) %>% 
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,NA,"education"),
+    sep = "!!"
+  ) %>% 
+  filter(!is.na(education)) %>%
+  mutate(race = census_race_categories[x]) %>%
+      mutate(year = y) %>%
+      filter(education == 
+               c("Less than high school diploma","High school graduate (includes equivalency)")) %>%
+      group_by(county, year) %>%
+      summarize(estimate = sum(estimate))
+})})
+
+
+all_total_7_2 <- all_total_7_2 %>%
+  group_by(county,year) %>%
+  summarize(estimate = sum(estimate, na.rm = T))
+
+no_college_25 <- all_total_7 %>%
+  rbind(all_total_7_2) %>%
+  rename(Total = estimate) %>%
+  left_join(no_college_25_latin) %>%
+  mutate(perc = Latin/Total*100) %>%
+  select(county, year, perc)
+
+```
+
+```{r}
+#FIND % LATIN NO COLLEGE VS TOTAL
+
+latin_total_pop_1 <- 
+  2006:2009 %>%
+  map_dfr(function(x){
+  latin_total_pop_1 <- getCensus(
+    name = "acs/acs1",
+    vintage = x,
+    region = "county:001,013,041,055,075,081,085,095,097",
+    regionin = "state:06",
+    vars = "group(B03002)"
+  ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  select(!ends_with(c("EA","MA","M")))%>%
+  left_join(
+    acs_vars_2006_5yr %>%
+      select(name, label)) %>%
+    filter(name =="B03002_001E" | name =="B03002_012E") %>%
+    mutate(year = x)
+  })
+
+latin_total_pop_2 <- 
+  2010:2019 %>%
+  map_dfr(function(x){
+  latin_total_pop_2 <- getCensus(
+    name = "acs/acs5",
+    vintage = x,
+    region = "county:001,013,041,055,075,081,085,095,097",
+    regionin = "state:06",
+    vars = "group(B03002)"
+  ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  )  %>%
+  left_join(
+    acs_vars_2019_5yr %>%
+      select(name, label)) %>%
+    filter(name =="B03002_001E" | name =="B03002_012E") %>%
+    mutate(year = x)
+  })
+
+latin_total_filter <- 
+  latin_total_pop_1 %>%
+  filter(name == 	"B03002_001E") %>%
+  rename(Total = estimate)
+
+latin_total_filter2 <- 
+  latin_total_pop_1 %>%
+  filter(name == 	"B03002_012E") %>%
+  rename(Latin = estimate)
+
+latin_total_filter3 <- 
+  latin_total_pop_2 %>%
+  filter(name == 	"B03002_001E") %>%
+  rename(Total = estimate)
+
+latin_total_filter4 <- 
+  latin_total_pop_2 %>%
+  filter(name == 	"B03002_012E") %>%
+  rename(Latin = estimate)
+
+latin_bind <-
+  latin_total_filter %>%
+  left_join(latin_total_filter2, by =c("year","county")) %>%
+  mutate(perc_total = Latin/Total*100)
+
+latin_bind2 <-
+  latin_total_filter3 %>%
+  left_join(latin_total_filter4, by =c("year","county")) %>%
+  mutate(perc_total = Latin/Total*100)
+
+latin_bind_total <- 
+  latin_bind %>%
+  rbind(latin_bind2) %>% 
+  select(county, year, perc_total)
+  
+```
+
+```{r}
+#GET TOTAL % HISPANIC POPULATION
+
+plot_total <- latin_bind_total %>%
+  left_join(no_college_25) %>%
+  mutate(overrep = perc/perc_total) %>%
+  select(county,year,overrep)
+
+```
+
+```{r}
+#PLOT
+
+ggplot()+   
+  geom_line(data = plot_total, aes(x = year, y = overrep, color = county)) +
+  geom_point() +
+  labs(x = "Year",
+       y = "Y",
+       title = "Latinx 25+ Populationn with No College Degree")
+
+
+
 ```
 
