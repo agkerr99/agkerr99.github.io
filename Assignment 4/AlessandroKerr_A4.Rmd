@@ -210,50 +210,6 @@ sc_edu_total2 <-
   group_by(education) %>%
   summarize(estimate = sum(estimate))
 
-# sc_edu_total2 <- getCensus(
-#     name = "acs/acs5",
-#     vintage = 2019,
-#     region = "county:085", 
-#     regionin = "state:06",
-#     vars = "group(B15002)"
-#    ) %>%
-#   select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
-#   pivot_longer(
-#     ends_with("E"),
-#     names_to = "name",
-#     values_to = "estimate"
-#   ) %>%
-#   left_join(
-#     acs_vars_2019_5yr %>% 
-#       select(name, label)
-#   ) %>% 
-#   select(-name) %>% 
-#   separate(
-#     label,
-#     into = c(NA,NA,NA,"education"),
-#     sep = "!!"
-#   ) %>% 
-#   filter(!is.na(education))%>%
-#   mutate(race = "Total") %>%
-#   select(-county)
-# 
-# sc_edu_total2 <-
-#   sc_edu_total2 %>%
-#   mutate(estimate2 = NA)
-# 
-# sc_edu_total2$estimate2[1] = sum(sc_edu_total2$estimate[1:8],sc_edu_total2$estimate[17:24])
-# sc_edu_total2$estimate2[2] = sum(sc_edu_total2$estimate[9], sc_edu_total2$estimate[25])
-# sc_edu_total2$estimate2[3] = sum(sc_edu_total2$estimate[10:12], sc_edu_total2$estimate[26:28])
-# sc_edu_total2$estimate2[4] = sum(sc_edu_total2$estimate[13:16], sc_edu_total2$estimate[29:32])
-# 
-# sc_edu_total2$education[1:4] = c("Less than high school diploma", "High school graduate (includes equivalency)", "Some college or associate's degree", "Bachelor's degree or higher" )
-# 
-# sc_edu_total2 <- 
-#   sc_edu_total2 %>%
-#   mutate(estimate = estimate2) %>%
-#   select(-estimate2) %>%
-#   filter(row_number() %in% 1:4)
-
 #total education minus sum of latinX & White, not Latinx
 
 not_white_latin <- sc_edu2 %>%
