@@ -24,7 +24,7 @@ library(units)
 
 #PART 1
 
-Part 1 consists of retrieving CES 4.0 data for the Bay Area. Maps will be produced for the PM2.5 and Asthma rankings. Using the data methodology information in the CalEnviroScreen report, the context of the variables can be determined. Firstly, the asthma variable represents the age-adjusted rate of emergency department visits for asthma per 10,000 people (from 2015 to 2017). Alternatively, the PM2.5 variable is quantified by the annual mean PM2.5 concentration in micrograms per meter cubed (from 2015 to 2017). 
+Part 1 consists of retrieving CES 4.0 data for the Bay Area. Maps will be produced for the PM2.5 and Asthma rankings. Using the data methodology information in the CalEnviroScreen report, the context of the variables can be determined. Firstly, the asthma variable represents the age-adjusted rate of emergency department visits for asthma per 10,000 people (from 2015 to 2017). Alternatively, the PM2.5 variable is quantified by the annual mean PM2.5 concentration in micrograms per meter cubed (from 2015 to 2017). The plots can be seen below. 
 
 ```{r}
 library(readxl)
@@ -66,7 +66,7 @@ bay_counties <-
   counties("CA", cb = T, progress_bar = F) %>%
   filter(NAME %in% bay_county_names)
 
-ca_tracts <- tracts("CA")
+ca_tracts <- tracts("CA", progress_bar = F)
 
 ces4_map <-  ces4_clean %>%
   left_join(
@@ -93,7 +93,7 @@ ces4_map <-  ces4_clean %>%
 
 ```{r}
 pums_pal <- colorNumeric(
-  palette = "RdYlBu",
+  palette = "Spectral",
   domain = ces4_map$Asthma
 )
 
@@ -122,7 +122,7 @@ leaflet() %>%
 
 ```{r}
 pums_pal <- colorNumeric(
-  palette = "RdYlBu",
+  palette = "Spectral",
   domain = ces4_map$PM2.5
 )
 
@@ -153,6 +153,8 @@ leaflet() %>%
 
 #PART 2
 
+Next, a scatter plot was produced to compare PM2.5 (x-axis) and Asthma (y-axis). The plot can be seen below. 
+
 
 ```{r}
 ggplot(
@@ -168,10 +170,12 @@ ggplot(
 ```
 
 
-At this stage, the "fitness" of the best-fit line appears to be somewhat correlated with the data. Although, it appears that there is an inflection in the data around 8 on the PM2.5 axis. 
+At this stage, the "fitness" of the best-fit line appears to be somewhat correlated with the data. Although, it appears that there is an inflection in the data around 8 on the PM2.5 axis. The data is not spaced evenly in the vertical direction to the line of best fit. Rather, a large concentration directly below the line is offset by a wide distribution above the line. 
 
 
 #PART 3
+
+Now, a linear regression analysis using the lm() function will be completed. Ther results can be seen below.
 
 ```{r}
 model <- lm(Asthma ~ PM2.5, ces4_map)
@@ -179,12 +183,13 @@ model <- lm(Asthma ~ PM2.5, ces4_map)
 summary(model)
 ```
 
-The following can be taken away from the summary of the model: 
+The following can be said from the summary of the model: 
 
 An increase of 1 unit in PM2.5 is associated with an increase of 19.77 in Asthma; 9.62% of the variation in PM2.5 is explained by the variation in Asthma.
 
 #PART 4
 
+Now, the residual distrubtion will be plotted. This provides data about how skewed the data is (if at all).
 
 ```{r}
 plot(density(residuals(model)))
@@ -205,7 +210,7 @@ ggplot(
   geom_smooth()
 ```
 
-The fitness of the line appears to be a lot more centered on the data with a log transformation applied. 
+The fitness of the line appears to be a lot more centered on the data with a log transformation applied. There is a more distributed spread above and below the line of best fit. Likewise, a summary of the transformed model can be seen below. 
 
 ```{r}
 model2 <- lm(log(Asthma) ~ PM2.5, ces4_map)
@@ -218,11 +223,13 @@ An increase of 1 unit in PM2.5 is associated with an increase of exp(0.356) or 1
 
 #PART 5
 
+Lastly, the residuals of the log transformed model can be seen below.
+
 ```{r}
 plot(density(residuals(model2)))
 ```
 
-After applying a log-transformation to the y-axis, the distribution of the residuals is no longer skewed and is much more centered. 
+After applying a log-transformation to the y-axis, the distribution of the residuals is no longer skewed and is much more centered. These residuals can be plotted for the entire Bay Area, which can be seen on the map below. 
 
 
 ```{r}
@@ -241,10 +248,12 @@ mapview(res_plot, zcol = "res")
 
 ```
 
+In order to determine the tract where the residuals are most negative, a summary of the residuals column of the data frame can be seen below. After sorting the data frame, the most negative residual occurs in row 758. The location of this tract can be seen in the map below. 
+
 ```{r}
 summary(res_plot$res)
 
 mapview(res_plot[758,])
 ```
 
-Based on the above analysis, the area with the most negative residuals is in Stanford, California. This area represents the east portion of the Stanford University campus. An area with the lowest residuals means that data falls the furthest below the line of best fit (when compared to the population of data). This means there is an under-representation of Asthma when compared to the average. This could be because of the long term effects not being seen often as students are constantly moving in and out of the campus.  
+Based on the above analysis, the area with the most negative residuals is in Stanford, California. This area represents the east portion of the Stanford University campus. It is important to note that the west portion of the Stanford campus was the second most negative residual. An area with the lowest residuals means that data falls the furthest below the line of best fit (when compared to the population of data). This means there is an under-representation of Asthma when compared to the average. This could be because of the long term effects not being seen often as students are constantly moving in and out of the campus.  
