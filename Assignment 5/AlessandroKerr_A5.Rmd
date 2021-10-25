@@ -24,6 +24,8 @@ library(units)
 
 #PART 1
 
+Part 1 consists of retrieving CES 4.0 data for the Bay Area. Maps will be produced for the PM2.5 and Asthma rankings. Using the data methodology information in the CalEnviroScreen report, the context of the variables can be determined. Firstly, the asthma variable represents the age-adjusted rate of emergency department visits for asthma per 10,000 people (from 2015 to 2017). Alternatively, the PM2.5 variable is quantified by the annual mean PM2.5 concentration in micrograms per meter cubed (from 2015 to 2017). 
+
 ```{r}
 library(readxl)
 
@@ -47,7 +49,24 @@ ces4_clean <- ces4 %>%
 ```
 
 ```{r}
-ca_tracts <- tracts("CA") 
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+bay_counties <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME %in% bay_county_names)
+
+ca_tracts <- tracts("CA")
 
 ces4_map <-  ces4_clean %>%
   left_join(
@@ -55,8 +74,17 @@ ces4_map <-  ces4_clean %>%
       transmute(GEOID = as.numeric(GEOID)), 
     by = c("Census Tract" = "GEOID")
   ) %>%
-  st_as_sf() %>% 
-  select("Asthma", "PM2.5")
+  st_as_sf() %>%
+  st_centroid() %>% 
+  .[bay_counties, ] %>% 
+  st_drop_geometry() %>%
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = as.numeric(GEOID)), 
+    by = c("Census Tract" = "GEOID")
+  ) %>% 
+  st_as_sf() %>%
+  select("Asthma", "PM2.5") 
 
 #mapview(ces4_map, zcol = "Asthma")
 #mapview(ces4_map, zcol = "PM2.5")
@@ -65,7 +93,7 @@ ces4_map <-  ces4_clean %>%
 
 ```{r}
 pums_pal <- colorNumeric(
-  palette = "PiYG",
+  palette = "RdYlBu",
   domain = ces4_map$Asthma
 )
 
@@ -78,7 +106,7 @@ leaflet() %>%
     opacity = 0.5,
     fillOpacity = 0.5,
     weight = 1,
-    label = "Asthma Ranking ** UPDATE",
+    label = "Asthma Ranking",
     highlightOptions = highlightOptions(
       weight = 2,
       opacity = 1
@@ -94,7 +122,7 @@ leaflet() %>%
 
 ```{r}
 pums_pal <- colorNumeric(
-  palette = "PiYG",
+  palette = "RdYlBu",
   domain = ces4_map$PM2.5
 )
 
@@ -107,7 +135,7 @@ leaflet() %>%
     opacity = 0.5,
     fillOpacity = 0.5,
     weight = 1,
-    label = "PM2.5 Ranking ** UPDATE",
+    label = "PM2.5 Ranking",
     highlightOptions = highlightOptions(
       weight = 2,
       opacity = 1
@@ -140,7 +168,8 @@ ggplot(
 ```
 
 
-Comment on the apparent “fitness” of the best-fit line at this stage.
+At this stage, the "fitness" of the best-fit line appears to be somewhat correlated with the data. Although, it appears that there is an inflection in the data around 8 on the PM2.5 axis. 
+
 
 #PART 3
 
@@ -150,14 +179,19 @@ model <- lm(Asthma ~ PM2.5, ces4_map)
 summary(model)
 ```
 
-An increase of _ in _ is associated with an increase of _ in _; _% of the variation in _ is explained by the variation in _
+The following can be taken away from the summary of the model: 
+
+An increase of 1 unit in PM2.5 is associated with an increase of 19.77 in Asthma; 9.62% of the variation in PM2.5 is explained by the variation in Asthma.
+
+#PART 4
 
 
 ```{r}
 plot(density(residuals(model)))
 ```
 
-Describe what is wrong with the  model:
+As seen above, the distribution of the data is non-centered. In cases like this when the data is skewed, it can be better fit through a curve. Below is the model with a log transformation applied. 
+
 
 ```{r}
 ggplot(
@@ -171,11 +205,15 @@ ggplot(
   geom_smooth()
 ```
 
+The fitness of the line appears to be a lot more centered on the data with a log transformation applied. 
+
 ```{r}
 model2 <- lm(log(Asthma) ~ PM2.5, ces4_map)
 
 summary(model2)
 ```
+
+An increase of 1 unit in PM2.5 is associated with an increase of exp(0.356) or 1.43 times in Asthma; 10.62% of the variation in PM2.5 is explained by the variation in Asthma.
 
 
 #PART 5
@@ -184,7 +222,7 @@ summary(model2)
 plot(density(residuals(model2)))
 ```
 
-Explain what happened here...
+After applying a log-transformation to the y-axis, the distribution of the residuals is no longer skewed and is much more centered. 
 
 
 ```{r}
@@ -199,12 +237,14 @@ res_plot <- ces4_map %>%
   cbind(res)
 
 
-#mapview(res_plot, zcol = "res")
-#FIND WHERE MAX IS and make sure it binded correctly.
+mapview(res_plot, zcol = "res")
+
 ```
 
 ```{r}
-#mapview(res_plot[7945,])
+summary(res_plot$res)
+
+mapview(res_plot[758,])
 ```
 
-Based on the above analysis, he area with the highest residuals is in Westwood, California. 
+Based on the above analysis, the area with the most negative residuals is in Stanford, California. This area represents the east portion of the Stanford University campus. An area with the lowest residuals means that data falls the furthest below the line of best fit (when compared to the population of data). This means there is an under-representation of Asthma when compared to the average. This could be because of the long term effects not being seen often as students are constantly moving in and out of the campus.  
