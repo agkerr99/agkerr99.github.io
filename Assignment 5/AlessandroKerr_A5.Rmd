@@ -1,0 +1,210 @@
+---
+title: "AlessandroKerr_A5"
+output: html_document
+author: "Alessandro Kerr"
+date: " Oct 26, 2021"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+```
+
+```{r}
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+library(mapview)
+library(units)
+```
+
+
+#PART 1
+
+```{r}
+library(readxl)
+
+temp <- tempfile()
+download.file("https://oehha.ca.gov/media/downloads/calenviroscreen/document/calenviroscreen40resultsdatadictionaryd12021.zip",destfile = temp)
+
+ces4 <- read_excel(
+  unzip(
+    temp, 
+    "CalEnviroScreen_4.0Excel_ADA_D1_2021.xlsx"
+  ), 
+  sheet = "DRAFTCES4.0_results"
+)
+
+unlink(temp)
+```
+
+```{r}
+ces4_clean <- ces4 %>%
+  dplyr::select(!ends_with("Pctl"))
+```
+
+```{r}
+ca_tracts <- tracts("CA") 
+
+ces4_map <-  ces4_clean %>%
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = as.numeric(GEOID)), 
+    by = c("Census Tract" = "GEOID")
+  ) %>%
+  st_as_sf() %>% 
+  select("Asthma", "PM2.5")
+
+#mapview(ces4_map, zcol = "Asthma")
+#mapview(ces4_map, zcol = "PM2.5")
+```
+
+
+```{r}
+pums_pal <- colorNumeric(
+  palette = "PiYG",
+  domain = ces4_map$Asthma
+)
+
+leaflet() %>%
+  addTiles() %>% 
+  addPolygons(
+    data = ces4_map,
+    fillColor = ~pums_pal(Asthma),
+    color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.5,
+    weight = 1,
+    label = "Asthma Ranking ** UPDATE",
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
+  ) %>% 
+  addLegend(
+    data = ces4_map,
+    pal = pums_pal,
+    values = ~Asthma,
+    title = "Asthma"
+  )
+```
+
+```{r}
+pums_pal <- colorNumeric(
+  palette = "PiYG",
+  domain = ces4_map$PM2.5
+)
+
+leaflet() %>%
+  addTiles() %>% 
+  addPolygons(
+    data = ces4_map,
+    fillColor = ~pums_pal(PM2.5),
+    color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.5,
+    weight = 1,
+    label = "PM2.5 Ranking ** UPDATE",
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
+  ) %>% 
+  addLegend(
+    data = ces4_map,
+    pal = pums_pal,
+    values = ~PM2.5,
+    title = "PM2.5"
+  )
+```
+
+
+
+#PART 2
+
+
+```{r}
+ggplot(
+   data = ces4_map,
+   aes(
+      x = PM2.5,
+      y = Asthma
+    )
+) +
+  geom_point() +
+  geom_smooth()
+  
+```
+
+
+Comment on the apparent “fitness” of the best-fit line at this stage.
+
+#PART 3
+
+```{r}
+model <- lm(Asthma ~ PM2.5, ces4_map)
+
+summary(model)
+```
+
+An increase of _ in _ is associated with an increase of _ in _; _% of the variation in _ is explained by the variation in _
+
+
+```{r}
+plot(density(residuals(model)))
+```
+
+Describe what is wrong with the  model:
+
+```{r}
+ggplot(
+   data = ces4_map,
+   aes(
+      x = PM2.5,
+      y = log(Asthma)
+    )
+) +
+  geom_point() +
+  geom_smooth()
+```
+
+```{r}
+model2 <- lm(log(Asthma) ~ PM2.5, ces4_map)
+
+summary(model2)
+```
+
+
+#PART 5
+
+```{r}
+plot(density(residuals(model2)))
+```
+
+Explain what happened here...
+
+
+```{r}
+
+#TRYING TO PLOT GEOMETRY AND RESIDUALS
+
+model3 <- lm(log(Asthma) ~ PM2.5, ces4_map, na.action="na.exclude")
+
+res <- resid(model3)
+  
+res_plot <- ces4_map %>%
+  cbind(res)
+
+
+#mapview(res_plot, zcol = "res")
+#FIND WHERE MAX IS and make sure it binded correctly.
+```
+
+```{r}
+#mapview(res_plot[7945,])
+```
+
+Based on the above analysis, he area with the highest residuals is in Westwood, California. 

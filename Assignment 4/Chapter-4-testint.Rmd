@@ -1,0 +1,629 @@
+---
+title: "Chapter 4 testing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(censusapi)
+
+Sys.setenv(CENSUS_KEY="0f0e2bffc9d96d5405bcb932e25318a4edb32602")
+
+
+```
+
+```{r}
+bay_income_race_white_2019  <- getCensus(
+  name = "acs/acs5",
+  vintage = "2019",
+  region = "county:001, 013, 041, 055, 075, 081, 085, 095, 097",
+  regionin = "state:06",
+  vars = "group(B19001A)" #Gives you all the responses
+) %>% select(ends_with("E") & -c(state, NAME)) %>%
+  summarize_all(sum) %>%
+  pivot_longer(
+    everything(),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>%
+      select(name, label)
+  ) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"income"),
+    sep = "!!"
+  ) %>%
+  select(-name) %>%
+  filter(!is.na(income)) %>%
+  mutate(
+    race = "White alone"
+    )
+
+
+# full_dataset <- NULL
+# for(x in LETTERS){
+#   #temp <- yourcode
+#   #LETTERS[x]
+#   full_dataset <- 
+#     rbind(full_dataset, temp)
+# }
+
+race_categories <- c(
+  "White alone",
+  "Black or African American alone",
+  "American Indian and Alaska Native alone",
+  "Asian alone",
+  "Native Hawaiian and Other Pacific Islander alone",
+  "Some Other Race alone",
+  "Two or more Races"
+)
+
+
+bay_income_race_2019 <-
+  1:7 %>% 
+  map_dfr(function(x){
+    
+    getCensus(
+      name = "acs/acs5",
+      vintage = "2019",
+      region = "county:001,013,041,055,075,081,085,095,097",
+      regionin = "state:06",
+      vars = paste0("group(B19001",LETTERS[x],")")
+    ) %>% 
+      select(ends_with("E") & -c(state, NAME)) %>% 
+      summarize_all(sum) %>% 
+      pivot_longer(
+        everything(),
+        names_to = "name",
+        values_to = "estimate"
+      ) %>% 
+      left_join(
+        acs_vars_2019_5yr %>% 
+          select(name, label)
+      ) %>% 
+      separate(
+        label,
+        into = c(NA, NA, "income"),
+        sep = "!!"
+      ) %>% 
+      select(-name) %>% 
+      filter(!is.na(income)) %>% 
+      mutate(
+        race = race_categories[x]
+      )
+    
+  })
+    
+
+```
+
+#TEXTBOOK EXAMPLES
+
+```{r}
+library(tidyverse)
+library(censusapi)
+
+Sys.setenv(CENSUS_KEY="0f0e2bffc9d96d5405bcb932e25318a4edb32602")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+```
+
+```{r}
+bay_income_white <-
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "county:001,013,041,055,075,081,085,095,097",
+    regionin = "state:06",
+    vars = "group(B19001A)"
+  ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label)
+  ) %>% 
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"income"),
+    sep = "!!"
+  ) %>% 
+  filter(!is.na(income))
+```
+
+```{r}
+census_race_categories <- data.frame(
+  code = c("A","B","C","D","E","F","G"),
+  category =
+    c(
+      "White Alone",
+      "Black or African American",
+      "American Indian and Alaska Native Alone",
+      "Asian Alone",
+      "Native Hawaiian and Other Pacific Islander Alone",
+      "Some Other Race Alone",
+      "Two or More Races"
+    )
+)
+```
+
+```{r}
+census_race_categories <- 
+  c(
+    "White Alone",
+    "Black or African American",
+    "American Indian and Alaska Native Alone",
+    "Asian Alone",
+    "Native Hawaiian and Other Pacific Islander Alone",
+    "Some Other Race Alone",
+    "Two or More Races"
+  )
+
+bay_income_race <-
+  1:7 %>% 
+  map_dfr(function(x){
+    getCensus(
+      name = "acs/acs5",
+      vintage = 2019,
+      region = "county:001,013,041,055,075,081,085,095,097",
+      regionin = "state:06",
+      vars = paste0("group(B19001",LETTERS[x],")")
+    ) %>%
+      select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+      pivot_longer(
+        ends_with("E"),
+        names_to = "name",
+        values_to = "estimate"
+      ) %>%
+      left_join(
+        acs_vars_2019_5yr %>% 
+          select(name, label)
+      ) %>% 
+      select(-name) %>% 
+      separate(
+        label,
+        into = c(NA,NA,"income"),
+        sep = "!!"
+      ) %>% 
+      filter(!is.na(income)) %>% 
+      mutate(race = census_race_categories[x])
+  })
+```
+
+```{r}
+bay_income_race %>% 
+  group_by(income, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income,
+      y = estimate,
+      fill = race
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Number of households",
+    title = "Bay Area household income by race",
+    fill = "Race of householder"
+  )
+```
+```{r}
+bay_income_race %>% 
+  group_by(income, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income,
+      y = estimate,
+      fill = race
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Number of households",
+    title = "Bay Area household income by race",
+    fill = "Race of householder"
+  ) +
+  coord_flip()
+```
+```{r}
+bay_income_race %>% 
+  group_by(income, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income %>% factor(levels = unique(bay_income_race$income)),
+      y = estimate,
+      fill = race %>% factor(levels = unique(bay_income_race$race))
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Number of households",
+    title = "Bay Area household income by race",
+    fill = "Race of householder"
+  ) +
+  coord_flip()
+```
+```{r}
+bay_income_race %>% 
+  group_by(income, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income %>% factor(levels = rev(unique(bay_income_race$income))),
+      y = estimate,
+      fill = race %>% factor(levels = rev(unique(bay_income_race$race)))
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Proportion of households",
+    title = "Bay Area household income by race",
+    fill = "Race of householder"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  ) + 
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+  
+```
+
+```{r}
+bay_income_race %>% 
+  group_by(income, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income %>% factor(levels = rev(unique(bay_income_race$income))),
+      y = estimate,
+      fill = race %>% factor(levels = rev(unique(bay_income_race$race)))
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Proportion of households",
+    title = "Bay Area household income by race",
+    fill = "Race of householder"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )
+  
+```
+
+```{r}
+bay_race_total <-
+  bay_income_race %>% 
+  group_by(race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  mutate(income = "Total")
+
+bay_income_race %>% 
+  group_by(income, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  rbind(bay_race_total) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income %>% factor(levels = rev(c("Total",unique(bay_income_race$income)))),
+      y = estimate,
+      fill = race %>% factor(levels = rev(unique(bay_income_race$race)))
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Proportion of households",
+    title = "Bay Area household income by race",
+    fill = "Race of householder"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )  +
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+```
+
+```{r}
+((sum(bay_race_total$estimate[1:6])/sum(bay_race_total$estimate))*100) %>% round()
+```
+
+```{r}
+((bay_income_race %>% 
+  filter(income %in% bay_income_race$income[1:5]) %>% 
+  filter(race != "White Alone") %>% 
+  pull(estimate) %>% 
+  sum()) /
+  (bay_income_race %>% 
+    filter(income %in% bay_income_race$income[1:5]) %>% 
+    pull(estimate) %>% 
+    sum()) * 100) %>% 
+  round()
+```
+
+```{r}
+((((bay_income_race %>% 
+  filter(income %in% bay_income_race$income[1:5]) %>% 
+  filter(race != "White Alone") %>% 
+  pull(estimate) %>% 
+  sum()) /
+  (bay_income_race %>% 
+    filter(income %in% bay_income_race$income[1:5]) %>% 
+    pull(estimate) %>% 
+    sum())) / (sum(bay_race_total$estimate[1:6])/sum(bay_race_total$estimate)) - 1) * 100) %>% 
+  round()
+```
+
+```{r}
+library(readxl)
+
+temp <- tempfile()
+download.file("https://oehha.ca.gov/media/downloads/calenviroscreen/document/calenviroscreen40resultsdatadictionaryd12021.zip",destfile = temp)
+
+ces4 <- read_excel(
+  unzip(
+    temp, 
+    "CalEnviroScreen_4.0Excel_ADA_D1_2021.xlsx"
+  ), 
+  sheet = "DRAFTCES4.0_results"
+)
+
+unlink(temp)
+```
+
+```{r}
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+ca_tracts <- tracts("CA", cb = T, progress_bar = F)
+
+ces4_bay_pm25 <-
+  ces4 %>% 
+  filter(`California County` %in% bay_county_names) %>% 
+  select(`Census Tract`, PM2.5) %>% 
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = as.numeric(GEOID)), 
+    by = c("Census Tract" = "GEOID")
+  ) %>% 
+  st_as_sf()
+```
+
+```{r}
+pm25_pal <- colorNumeric(
+  palette = "Reds",
+  domain = ces4_bay_pm25$PM2.5
+)
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = ces4_bay_pm25,
+    fillColor = ~pm25_pal(PM2.5),
+    color = "white",
+    weight = 0.5,
+    fillOpacity = 0.5,
+    label = ~PM2.5
+  )
+```
+
+```{r}
+summary(ces4_bay_pm25$PM2.5)
+```
+
+```{r}
+census_race_categories <- 
+  c(
+    "White Alone",
+    "Black or African American",
+    "American Indian and Alaska Native Alone",
+    "Asian Alone",
+    "Native Hawaiian and Other Pacific Islander Alone",
+    "Some Other Race Alone",
+    "Two or More Races"
+  )
+
+bay_race_tracts <-
+  1:7 %>% 
+  map_dfr(function(x){
+    getCensus(
+      name = "acs/acs5",
+      vintage = 2019,
+      region = "tract:*",
+      regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+      vars = paste0("B19001",LETTERS[x],"_001E")
+    ) %>%
+      mutate(
+        tract = paste0(state, county, tract) %>% as.numeric(),
+        race = census_race_categories[x]
+      ) %>% 
+      select(
+        tract,
+        race,
+        estimate = paste0("B19001",LETTERS[x],"_001E")
+      )
+  })
+```
+
+```{r}
+bay_pm25_race <-
+  bay_race_tracts %>% 
+  left_join(
+    ces4_bay_pm25 %>% 
+      st_drop_geometry(),
+    by = c("tract" = "Census Tract")
+  ) %>% 
+  mutate(
+    PM2.5_tier =
+      case_when(
+        PM2.5 < 6 ~ "5-6",
+        PM2.5 < 7 ~ "6-7",
+        PM2.5 < 8 ~ "7-8",
+        PM2.5 < 9 ~ "8-9",
+        PM2.5 < 10 ~ "9-10",
+        TRUE ~ "10-11"
+      ) 
+  ) %>% 
+  group_by(race, PM2.5_tier) %>% 
+  summarize(estimate = sum(estimate, na.rm = T))
+```
+
+```{r}
+bay_pm25_race_stacked <-
+  bay_pm25_race %>% 
+  group_by(PM2.5_tier, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  rbind(
+    bay_pm25_race %>% 
+      group_by(race) %>% 
+      summarize(estimate = sum(estimate)) %>% 
+      mutate(PM2.5_tier = "Total")
+  ) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = PM2.5_tier %>% factor(levels = rev(c("Total","5-6","6-7","7-8","8-9","9-10","10-11"))),
+      y = estimate,
+      fill = race %>% factor(levels = rev(census_race_categories))
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "PM2.5",
+    y = "Number of households",
+    title = "Bay Area PM2.5 exposure by race",
+    subtitle = "Annual mean concentration of PM2.5 (weighted average, µg/m3),\nover three years (2015 to 2017), aggregated by Census tract",
+    fill = "Race of householder"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  ) +
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+
+bay_pm25_race_fill <-
+  bay_pm25_race %>% 
+  group_by(PM2.5_tier, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  rbind(
+    bay_pm25_race %>% 
+      group_by(race) %>% 
+      summarize(estimate = sum(estimate)) %>% 
+      mutate(PM2.5_tier = "Total")
+  ) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = PM2.5_tier %>% factor(levels = rev(c("Total","5-6","6-7","7-8","8-9","9-10","10-11"))),
+      y = estimate,
+      fill = race %>% factor(levels = rev(census_race_categories))
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "PM2.5",
+    y = "Proportion of households",
+    title = "Bay Area PM2.5 exposure by race",
+    subtitle = "Annual mean concentration of PM2.5 (weighted average, µg/m3),\nover three years (2015 to 2017), aggregated by Census tract",
+    fill = "Race of householder"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  ) +
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+```
+
+```{r}
+bay_pm25_race_stacked
+
+```
+
+```{r}
+bay_pm25_race_fill
+```
+
+```{r}
+library(tidyverse)
+
+sample <- runif(1000)
+
+hist(sample)
+```
+
+```{r}
+start <- proc.time()
+sample <- runif(10000000)
+time <- proc.time() - start
+
+time
+
+hist(sample)
+```
+
