@@ -1,7 +1,7 @@
 ---
-title: "Assignment 3"
+title: "Assignment 3 - Resubmission"
 author: "Alessandro Kerr"
-date: " Oct 12, 2021"
+date: " Oct 25, 2021"
 output: html_document
 ---
 
@@ -17,6 +17,7 @@ library(tigris)
 library(leaflet)
 library(censusapi)
 library(lubridate)
+library(dplyr)
 ```
 
 ```{r}
@@ -50,7 +51,8 @@ pums_2019_1yr <- getCensus(
     "HINCP",
     "TEN",
     "R65" ,
-    "HUPAC"
+    "HUPAC",
+    "REFR"
   )
 )
 ```
@@ -102,15 +104,15 @@ bay_pums_heatrisk<-
   # filter(!duplicated(SERIALNO)) %>%
   mutate(
     WGTP = as.numeric(WGTP),
-    elderly_or_children = ifelse(
-      (R65 == 1) | (R65 == 2) | (HUPAC == 1), 
+    elderly_or_children_refr = ifelse(
+      (R65 == 1) & (REFR == 2) | (R65 == 2) & (REFR == 2) | (HUPAC == 1) & (REFR == 2) , 
       WGTP,
       0
     )
   ) %>%
-  group_by(PUMA) %>%
-  summarize( perc_elderly_or_children = 
-               sum(elderly_or_children, na.rm= T)/sum(WGTP, na.rm = T)*100
+  dplyr::group_by(PUMA) %>%
+  dplyr::summarize(perc_elderly_or_children_refr = 
+               sum(elderly_or_children_refr, na.rm= T)/sum(WGTP, na.rm = T)*100
   ) %>%
   left_join(
     bay_pumas %>%
@@ -127,26 +129,26 @@ bay_pums_heatrisk<-
 
 pums_pal <- colorNumeric(
   palette = "Purples",
-  domain = bay_pums_heatrisk$perc_elderly_or_children
+  domain = bay_pums_heatrisk$perc_elderly_or_children_refr
 )
 ```
 
 
-The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditioning, age was chosen as the factor to consider in more detail. As a result, residents were filtered for those who were elderly people (age 65+), or young people (under age 6). See the map below characterizing the Bay Area based on the percentage of elderly people or young children (at an elevated risk for extreme-heat impacts).
+The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning or refrigeratior, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditioning, age and access to refrigeration were chosen as the factor to consider in more detail. As a result, residents were filtered for those who were elderly people (age 65+), or young people (under age 6), and who had no refrigerator. See the map below characterizing the Bay Area based on the percentage of elderly people or young children with no refrigerator (at an elevated risk for extreme-heat impacts).
 
 ```{r}
 leaflet() %>%
   addTiles() %>% 
   addPolygons(
     data = bay_pums_heatrisk,
-    fillColor = ~pums_pal(perc_elderly_or_children),
+    fillColor = ~pums_pal(perc_elderly_or_children_refr),
     color = "white",
     opacity = 0.5,
     fillOpacity = 0.5,
     weight = 1,
     label = ~paste0(
-      round(perc_elderly_or_children), 
-      "%Elderly persons or children (at elevated risk for heat-extreme impacts)"
+      round(perc_elderly_or_children_refr), 
+      "%Elderly persons or children with no refrigerator (at elevated risk for heat-extreme impacts)"
     ),
     highlightOptions = highlightOptions(
       weight = 2,
@@ -156,8 +158,8 @@ leaflet() %>%
   addLegend(
     data = bay_pums_heatrisk,
     pal = pums_pal,
-    values = ~perc_elderly_or_children,
-    title = "% Elderly persons or <br> children (at elevated risk for <br> heat-extreme impacts)"
+    values = ~perc_elderly_or_children_refr,
+    title = "% Elderly persons or <br> children and no Refrigerator <br> (at elevated risk for <br> heat-extreme impacts)"
   )
 
 
@@ -174,18 +176,18 @@ sum_bay_pumas <- bay_pums %>%
   # filter(!duplicated(SERIALNO)) %>%
   mutate(
     WGTP = as.numeric(WGTP),
-    elderly_or_children = ifelse(
-      (R65 == 1) | (R65 == 2) | (HUPAC == 1), 
+    elderly_or_children_refr = ifelse(
+      (R65 == 1) & (REFR == 2) | (R65 == 2) & (REFR == 2) | (HUPAC == 1) & (REFR == 2), 
       WGTP,
       0
     )
   ) 
-sum(sum_bay_pumas$elderly_or_children, na.rm = T)
+sum(sum_bay_pumas$elderly_or_children_refr, na.rm = T)
 
 ```
 
 
-One key assumption relating to the production of this plot is that every young child or elderly person is at a higher-risk for extreme-heat impacts. While this may not be true for every case, it represents a group that would be expected to have a higher likelihood of being affected by extreme heat. 
+One key assumption relating to the production of this plot is that every young child or elderly person without a refrigerator is at a higher-risk for extreme-heat impacts. While this may not be true for every case, it represents a group that would be expected to have a higher likelihood of being affected by extreme heat. This is certainly not the only group at risk for heat-extreme impacts. 
 
 This map is certainly useful in gaining broad, general trends relating to the Bay Area. However, there are also flaws relating to the plot. When extremely large area boundaries and populations are grouped, it may cause some of the intricacies to be missed. A plot like this may be useful in targeting support to certain neighbourhoods. However, when the area boundaries are so large, it may overlook certain neighbourhoods that are more susceptible to these effects. More detailed geographical data would allow for social programs, targeted information, and community support to be more narrowly directed. Nonetheless, this plot is useful in visualizing the trends across a very large area. 
 
