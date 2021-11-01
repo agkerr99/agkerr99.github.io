@@ -238,3 +238,859 @@ summary(model)
 predict(model, data.frame(perc_college = 0.5))
 ```
 
+```{r}
+library(tidyverse)
+library(censusapi)
+library(sf)
+library(mapview)
+library(tigris)
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+```
+
+```{r}
+bay_multiple_tract <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "tract:*",
+    regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+    vars = c(
+      "B06009_001E",
+      "B06009_002E",
+      "B06009_003E",
+      "B19001_001E",
+      "B19001_014E",
+      "B19001_015E",
+      "B19001_016E",
+      "B19001_017E",
+      "B19001A_001E"
+    )
+  ) %>% 
+  transmute(
+    tract = paste0(state, county, tract),
+    perc_college = 1 - (B06009_002E + B06009_003E) / B06009_001E,
+    perc_over100k = (B19001_014E + B19001_015E + B19001_016E + B19001_017E) / B19001_001E,
+    perc_white = B19001A_001E / B19001_001E
+  ) %>% 
+  filter(
+    !is.na(perc_college), 
+    !is.na(perc_over100k),
+    !is.na(perc_white)
+  )
+```
+
+```{r}
+library(corrplot)
+
+correlationplot <- bay_multiple_tract %>% 
+  select(
+    perc_white, 
+    perc_college,
+    perc_over100k
+  ) %>% 
+  cor()
+
+corrplot(
+  correlationplot, 
+  method = "number",
+  type = "upper"
+)
+```
+
+```{r}
+ggplot(
+  data = bay_multiple_tract,
+  aes(
+      x = perc_white,
+      y = perc_college
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+model <- lm(perc_college ~ perc_white, bay_multiple_tract)
+
+summary(model)
+```
+
+```{r}
+ggplot(
+  data = bay_multiple_tract,
+  aes(
+      x = perc_white,
+      y = perc_over100k
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+model <- lm(perc_over100k ~ perc_white, bay_multiple_tract)
+
+summary(model)
+```
+
+```{r}
+ggplot(
+  data = bay_multiple_tract,
+  aes(
+      x = perc_college,
+      y = perc_over100k
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+model <- lm(perc_over100k ~ perc_college, bay_multiple_tract)
+
+summary(model)
+```
+
+```{r}
+full_model <- lm(perc_over100k ~ perc_college + perc_white, bay_multiple_tract)
+
+summary(full_model)
+```
+
+```{r}
+ggplot(
+  data = bay_multiple_tract,
+  aes(
+      x = perc_white,
+      y = perc_over100k
+    )
+) +
+  geom_point(
+    aes(
+      color = perc_college
+    )
+  )
+```
+
+```{r}
+library(gtools)
+
+bay_multiple_tract %>% 
+  mutate(
+    college_round = quantcut(perc_college, 4)
+  ) %>% 
+  ggplot() +
+  geom_point(
+    aes(
+        x = perc_white,
+        y = perc_over100k,
+        color = college_round
+      )
+  ) +
+  geom_smooth(
+    aes(
+        x = perc_white,
+        y = perc_over100k,
+        color = college_round
+      ),
+    method = "lm",
+    se = F
+  ) +
+  geom_smooth(
+    aes(
+      x = perc_white,
+      y = perc_over100k
+    ),
+    method = "lm",
+    se = F,
+    color = "black",
+    linetype = 2
+  )
+```
+
+```{r}
+library(car)
+vif(full_model)
+```
+
+```{r}
+library(tidyverse)
+library(censusapi)
+library(sf)
+library(mapview)
+library(tigris)
+library(plotly)
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+bay_multiple_tract <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "tract:*",
+    regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+    vars = c(
+      "B06009_001E",
+      "B06009_002E",
+      "B06009_003E",
+      "B19001_001E",
+      "B19001_014E",
+      "B19001_015E",
+      "B19001_016E",
+      "B19001_017E",
+      "B19001A_001E"
+    )
+  ) %>% 
+  transmute(
+    tract = paste0(state, county, tract),
+    perc_college = 1 - (B06009_002E + B06009_003E) / B06009_001E,
+    perc_over100k = (B19001_014E + B19001_015E + B19001_016E + B19001_017E) / B19001_001E,
+    perc_white = B19001A_001E / B19001_001E
+  ) %>% 
+  filter(
+    !is.na(perc_college), 
+    !is.na(perc_over100k),
+    !is.na(perc_white)
+  )
+```
+
+
+
+```{r}
+plot_ly(
+        data = bay_multiple_tract,
+        x=~perc_white, 
+        y=~perc_college, 
+        z=~perc_over100k, 
+        type="scatter3d", 
+        mode="markers", 
+        color = ~perc_over100k)
+```
+
+```{r}
+library(tidyverse)
+library(censusapi)
+library(sf)
+library(mapview)
+library(tigris)
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+```
+
+```{r}
+bay_multiple_tract <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "tract:*",
+    regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+    vars = c(
+      "B06009_001E",
+      "B06009_002E",
+      "B06009_003E",
+      "B19001_001E",
+      "B19001_014E",
+      "B19001_015E",
+      "B19001_016E",
+      "B19001_017E",
+      "B19001A_001E"
+    )
+  ) %>% 
+  transmute(
+    tract = paste0(state, county, tract),
+    perc_college = 1 - (B06009_002E + B06009_003E) / B06009_001E,
+    perc_over100k = (B19001_014E + B19001_015E + B19001_016E + B19001_017E) / B19001_001E,
+    perc_white = B19001A_001E / B19001_001E
+  ) %>% 
+  filter(
+    !is.na(perc_college), 
+    !is.na(perc_over100k),
+    !is.na(perc_white)
+  )
+```
+
+```{r}
+model <- lm(perc_over100k ~ perc_college, bay_multiple_tract)
+
+summary(model)
+```
+
+```{r}
+years <- 2013:2019
+quarters <- 1:4
+
+pge_data <- NULL
+
+for(year in years) {
+  for(quarter in quarters) {
+      
+    filename <- 
+      paste0(
+        "pge/PGE_",
+        year,
+        "_Q",
+        quarter,
+        "_ElectricUsageByZip.csv"
+      )
+    
+    temp <- read_csv(filename)
+    
+    pge_data <- 
+      rbind(pge_data,temp)
+      
+  }
+}
+
+pge_avg_kwh <-
+  pge_data %>% 
+  filter(CUSTOMERCLASS == "Elec- Residential") %>% 
+  group_by(YEAR, MONTH) %>% 
+  summarize(
+    TOTALCUSTOMERS = sum(TOTALCUSTOMERS, na.rm = T),
+    TOTALMONTHLYKWH = sum(TOTALKWH, na.rm = T)
+  ) %>% 
+  mutate(
+    AVGMONTHLYKWH = TOTALMONTHLYKWH/TOTALCUSTOMERS,
+    DATE = 
+      paste(
+        YEAR,
+        MONTH, 
+        "01",
+        sep="-"
+      ) %>% as.Date()
+  )
+```
+
+```{r}
+ca_tracts <- tracts("CA", progress_bar = F)
+
+bay_education_centroid <- bay_multiple_tract %>%
+  left_join(
+    ca_tracts,
+    by = c("tract" = "GEOID")
+  ) %>% 
+  st_as_sf() %>% 
+  st_centroid() %>% 
+  select(tract, perc_college)
+```
+
+```{r}
+bay_education_lag <- bay_education_centroid %>%
+  mutate(
+    nearest = st_nearest_feature(.)
+  ) %>% 
+  left_join(
+    bay_education_centroid %>% 
+      st_drop_geometry() %>% 
+      transmute(
+        index = row_number(),
+        perc_college_lag = perc_college
+      ),
+    by = c("nearest" = "index")
+  )
+```
+
+```{r}
+bay_education_lag %>% 
+  ggplot(
+    aes(
+      x = perc_college_lag,
+      y = perc_college
+    )
+  ) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+model <- lm(perc_college ~ perc_college_lag, bay_education_lag)
+
+summary(model)
+```
+
+```{r}
+model <- lm(perc_college ~ perc_over100k + perc_white, bay_multiple_tract)
+
+summary(model)
+```
+
+```{r}
+bay_multiple_tract_lag <- 
+  bay_multiple_tract %>% 
+  left_join(
+    bay_education_lag %>% 
+      select(tract, perc_college_lag)
+  )
+
+model <- lm(perc_college ~ perc_college_lag + perc_over100k + perc_white, bay_multiple_tract_lag)
+
+summary(model)
+```
+
+```{r}
+library(spdep)
+```
+```{r}
+bay_multiple_tract_wts <- bay_multiple_tract %>%
+  left_join(
+    ca_tracts,
+    by = c("tract" = "GEOID")
+  ) %>% 
+  st_as_sf() %>%
+  poly2nb() %>%
+  nb2listw()
+```
+
+```{r}
+moran.test(bay_multiple_tract$perc_college, bay_multiple_tract_wts)
+```
+
+```{r}
+library(spatialreg)
+
+lag_model <- lagsarlm(
+  perc_college ~ perc_over100k + perc_white,
+  data = bay_multiple_tract, 
+  listw = bay_multiple_tract_wts
+)
+```
+
+```{r}
+lag_model$coefficients
+```
+
+```{r}
+lag_model$rho
+```
+
+#5.4
+
+```{r}
+library(censusapi)
+library(tidyverse)
+library(tigris)
+library(sf)
+library(leaflet)
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+```
+
+```{r}
+pums_2019_1yr <- getCensus(
+  name = "acs/acs1/pums",
+  vintage = 2019,
+  region = "public use microdata area:*", 
+  regionin = "state:06",
+  vars = c(
+    "SERIALNO",
+    "SPORDER",
+    "PWGTP",
+    "WGTP",
+    "AGEP",
+    "SCHL",
+    "PINCP",
+    "RAC1P",
+    "HISP",
+    "LANX"
+  )
+)
+```
+
+```{r}
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+bay_counties <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME %in% bay_county_names)
+
+bay_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[bay_counties, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+
+bay_pums <-
+  pums_2019_1yr %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% bay_pumas$PUMACE10)
+```
+
+```{r}
+bay_pums_regression <- bay_pums %>% 
+  mutate(
+    college = ifelse(
+      as.numeric(SCHL) >= 18,
+      1,
+      0
+    ),
+    income = as.numeric(PINCP)
+  ) %>% 
+  filter(
+    as.numeric(AGEP) >= 25,
+    income > 0
+  )
+```
+
+```{r}
+bay_pums_regression %>% 
+  ggplot(
+    aes(
+      x = college,
+      y = income
+    )
+  ) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+```{r}
+model <- lm(income ~ college, bay_pums_regression)
+
+summary(model)
+```
+
+```{r}
+bay_pums_education <- bay_pums %>% 
+  mutate(
+    education = SCHL %>% 
+      factor(
+        levels = bay_pums$SCHL %>% 
+          unique() %>%
+          as.numeric() %>% 
+          sort()
+      ),
+    income = as.numeric(PINCP)
+  ) %>% 
+  filter(
+    as.numeric(AGEP) >= 25,
+    income > 0
+  )
+```
+
+```{r}
+bay_pums_education %>% 
+  group_by(education) %>% 
+  summarize(
+    income = mean(income, na.rm = T)
+  ) %>% 
+  ggplot(
+    aes(
+      x = education,
+      y = income
+    )
+  ) +
+  geom_bar(
+    stat = "identity"
+  )
+```
+
+```{r}
+model <- lm(income ~ education, bay_pums_education)
+
+summary(model)
+```
+
+```{r}
+bay_pums_multiple <- bay_pums %>% 
+  mutate(
+    college = ifelse(
+      as.numeric(SCHL) >= 18,
+      "yes",
+      "no"
+    ),
+    race = case_when(
+      RAC1P == "1" ~ "white",
+      RAC1P == "2" ~ "black",
+      RAC1P == "6" ~ "asian",
+      TRUE ~ "other"
+    ),
+    income = as.numeric(PINCP)
+  ) %>% 
+  filter(
+    as.numeric(AGEP) >= 25,
+    income > 0
+  )
+  
+model <- lm(income ~ college + race, bay_pums_multiple)
+
+summary(model)
+```
+
+```{r}
+bay_pums_language <-
+  bay_pums %>% 
+  mutate(
+    AGEP = as.numeric(AGEP),
+    white = ifelse(
+      RAC1P == "1",
+      1,
+      0
+    ),
+    hispanic = ifelse(
+      HISP == "1",
+      0,
+      1
+    ),
+    english = ifelse(
+      LANX == "1",
+      0,
+      1
+    )
+  ) %>% 
+  filter(AGEP >= 5)
+```
+
+```{r}
+logit_model <- glm(
+  english ~ AGEP + white + hispanic,
+  family = quasibinomial(),
+  data = bay_pums_language
+)
+
+summary(logit_model)
+```
+
+```{r}
+exp(coef(logit_model))
+```
+
+```{r}
+exp(coef(logit_model))/(exp(coef(logit_model))+1)
+```
+
+```{r}
+predict(logit_model, data.frame(AGEP = 40, white = 1, hispanic = 0), type = "response")
+```
+
+```{r}
+library(survey)
+
+pums_2019_1yr_wts <- getCensus(
+  name = "acs/acs1/pums",
+  vintage = 2019,
+  region = "public use microdata area:*", 
+  regionin = "state:06",
+  vars = c(
+    paste0("PWGTP",1:80)
+  )
+) %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% bay_pumas$PUMACE10)
+
+bay_pums_language_wts <- pums_2019_1yr_wts %>% 
+  mutate(AGEP = bay_pums$AGEP) %>% 
+  filter(as.numeric(AGEP) >= 5) %>% 
+  select(starts_with("PWGTP"))
+```
+
+```{r}
+logit_survey_design <- svrepdesign(
+  data = bay_pums_language,
+  type = "ACS",
+  repweights = bay_pums_language_wts,
+  weights = ~as.numeric(PWGTP)
+)
+```
+
+```{r}
+logit_survey_model <- svyglm(
+  formula = english ~ AGEP + white + hispanic,
+  family = quasibinomial(),
+  design = logit_survey_design
+)
+```
+
+```{r}
+summary(logit_survey_model)
+```
+
+```{r}
+exp(coef(logit_survey_model))
+```
+
+```{r}
+predict(logit_survey_model, data.frame(AGEP = 40, white = 1, hispanic = 0), type = "response")
+```
+
+#5.5
+
+```{r}
+sample <- sample(
+  c(TRUE, FALSE), 
+  nrow(bay_pums_language), 
+  replace = T, 
+  prob = c(0.8,0.2)
+)
+
+train <- bay_pums_language[sample, ]
+test <- bay_pums_language[!sample, ]
+```
+
+```{r}
+train_design <- svrepdesign(
+  data = train,
+  type = "ACS",
+  repweights = bay_pums_language_wts[sample, ],
+  weights = ~as.numeric(PWGTP)
+)
+
+train_model <- svyglm(
+  formula = english ~ AGEP + white + hispanic,
+  family = quasibinomial(),
+  design = train_design,
+)
+```
+
+```{r}
+summary(train_model)
+```
+
+```{r}
+summary(train_model)
+```
+
+```{r}
+test_predicted <-
+  predict(train_model, newdata = test, type = "response")
+```
+
+
+
+```{r}
+summary_2x2 <-
+  test %>% 
+  mutate(
+    english = ifelse(
+      english == 1, 
+      "Yes (English)", 
+      "No (ESL)"
+    )
+  ) %>% 
+  pull(english) %>% 
+  table(test_predicted > 0.5)
+```
+
+#OCT 28 TESTING
+
+```{r}
+library(censusapi)
+library(tidyverse)
+library(tigris)
+library(sf)
+library(leaflet)
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+```
+
+```{r}
+pums_2019_1yr <- getCensus(
+  name = "acs/acs1/pums",
+  vintage = 2019,
+  region = "public use microdata area:*", 
+  regionin = "state:06",
+  vars = c(
+    "SERIALNO",
+    "SPORDER",
+    "PWGTP",
+    "WGTP",
+    "NP",
+    "HHL",
+    "HINCP",
+    "TEN",
+    "YBL",
+    "BLD",
+    "TEN",
+    "MV",
+    "HINCP",
+    "AGEP")
+)
+
+saveRDS(pums_2019_1yr, "a6_pums.rds")
+pums_2019_1yr <- readRDS("a6_pums.rds")
+```
+
+```{r}
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+sf_boundary <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME == "San Francisco")
+
+sf_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[sf_boundary, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+```
+
+```{r}
+sf_pums <- bay_pums <-
+  pums_2019_1yr %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% bay_pumas$PUMACE10)
+```
+
+#PART 4
+#Once you are dealing with unique SERIALNO, simply use numeric for HNCIP and AGEP
+
+```{r}
+sf_pums_clean <- sf_pums %>%
+  mutate(
+    YBL = as.numeric(YBL),
+    AGEP = as.numeric(AGEP),
+    as.numeric(HINCP)
+  ) %>%
+  filter(YBL %in% c(1:3)) %>%
+  arrange(AGEP) %>%
+  group_by(SERIALNO) %>%
+  summarize_all(first) %>%
+  mutate(leadrisk = ifelse(
+    as.numeric(HINCP) < 90000 & as.numeric(AGEP) < 6,
+    1,
+    0
+  ))
+  
+```
+
+
+```{r}
+
+```
+

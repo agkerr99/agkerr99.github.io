@@ -1,0 +1,261 @@
+---
+title: "Assignment 6"
+author: "Alessandro Kerr"
+date: " Nov 2, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+library(lubridate)
+library(dplyr)
+library(mapview)
+```
+
+#TASK 1
+
+Firstly, the PUMA's data will be filtered down to only San Francisco. There are three strange geographic anamolies that should be noted, but should not affect the analysis. Two instances in group 6, and one instance in group 2 appear to be small geographic areas that do not correlate with the rest of the group. These are due to islands that are technically a part of San Francisco. See the plotted PUMAs below.
+
+```{r}
+Sys.setenv(CENSUS_KEY="0f0e2bffc9d96d5405bcb932e25318a4edb32602")
+
+```
+
+```{r}
+ca_pumas <- pumas("CA", cb = T, progress_bar = F)
+
+sf_boundary <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME == "San Francisco")
+
+sf_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[sf_boundary, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+```
+
+```{r}
+mapview(sf_pumas)
+```
+
+#TASK 2
+
+Now, the PUMs data for the PUMAs was retrieved. 
+
+```{r}
+pums_2019_1yr <- getCensus(
+  name = "acs/acs1/pums",
+  vintage = 2019,
+  region = "public use microdata area:*", 
+  regionin = "state:06",
+  vars = c(
+    "SERIALNO",
+    "SPORDER",
+    "PWGTP",
+    "WGTP",
+    "NP",
+    "HHL",
+    "HINCP",
+    "TEN",
+    "MV",
+    "YBL",
+    "BLD",
+    "AGEP"
+  )
+)   
+```
+
+```{r}
+sf_pums <- bay_pums <-
+  pums_2019_1yr %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% sf_pumas$PUMACE10)
+```
+
+#PART 3
+
+From here, structures were filtered for those built before 1960. This is a simplification of the Lead Risk Chapter of the CES report.
+
+```{r}
+sf_house_1960 <- sf_pums %>%
+  filter(YBL == c(1,2,3))
+```
+
+#PART 4
+
+Now, the leadrisk variable was created based on household income being less than $90k, and at least one child being less than 6 years old.
+
+```{r}
+sf_pums_clean <- sf_pums %>%
+  mutate(
+    YBL = as.numeric(YBL),
+    AGEP = as.numeric(AGEP),
+    as.numeric(HINCP)
+  ) %>%
+  filter(YBL %in% c(1:3)) %>%
+  arrange(AGEP) %>%
+  group_by(SERIALNO) %>%
+  summarize_all(first) %>%
+  mutate(leadrisk = ifelse(
+    as.numeric(HINCP) < 90000 & as.numeric(AGEP) < 6,
+    1,
+    0
+  ))
+```
+
+#PART 5
+
+Next, a logit model was created for leadrisk based on the BLD, TEN, MV, and PUMA variables. The summary of the model can be seen below. 
+
+```{r}
+sf_pums_factors <- sf_pums_clean %>%
+  mutate(
+    pumas = public_use_microdata_area %>%
+      factor(
+        levels = sf_pums_clean$PUMA %>% 
+          unique() %>%
+          as.numeric() %>% 
+          sort()
+      ),
+    units = BLD %>%
+      factor(
+        levels = sf_pums_clean$BLD %>% 
+          unique() %>%
+          as.numeric() %>% 
+          sort()
+      ),
+    tenure = TEN %>%
+      factor(
+        levels = sf_pums_clean$TEN %>% 
+          unique() %>%
+          as.numeric() %>% 
+          sort()
+      ),
+    move = MV %>%
+      factor(
+        levels = sf_pums_clean$MV %>% 
+          unique() %>%
+          as.numeric() %>% 
+          sort()
+      )
+  )
+```
+
+```{r}
+
+model <- glm(
+  leadrisk ~ units + pumas + tenure + move,
+  family = quasibinomial(),
+  data = sf_pums_factors
+)
+
+
+summary(model)
+```
+
+
+Additionally, a predicted liklihood score can be seen for a random row in the dataset.
+
+
+```{r}
+random <- sample_n(sf_pums_factors,1)
+random
+predict(model, data.frame(random), type = "response")
+```
+
+#PART 6
+
+```{r}
+full_predict <- predict(model, sf_pums_factors, type = "response" )
+
+sf_pums_predict <- sf_pums_factors %>%
+  cbind(full_predict)
+
+```
+
+```{r}
+summary_2x2 <-
+  sf_pums_predict %>% 
+  mutate(
+    leadrisk = ifelse(
+      leadrisk == 1, 
+      "Yes (Leadrisk)", 
+      "No (Leadrisk)"
+    )
+  ) %>% 
+  pull(leadrisk) %>% 
+  table(full_predict>=0.1)
+
+summary_2x2
+```
+
+The following can be stated about the summary of the model. There were 4 cases of leadrisk that the model accurately predicted. There were 2200 cases where the model correctly predicted there is no lead risk. Conversely, there were 27 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 33 cases where the model predicted no lead risk, but they actually did have one. 
+
+Based on the prediction, they would mail out 37 packages. 
+
+#PART 7
+
+```{r}
+temp <- tempfile()
+download.file("https://www2.census.gov/programs-surveys/acs/data/pums/2019/1-Year/csv_hca.zip",destfile = temp)
+pums_hca_2019_1yr <- read_csv(unzip(temp,"psam_h06.csv"))
+unlink(temp)
+
+```
+
+```{r}
+pums_2019_1yr_wts <- pums_hca_2019_1yr %>%
+  filter(PUMA %in% sf_pumas$PUMACE10) %>%
+  mutate(YBL = as.numeric(YBL)) %>%
+  filter(YBL %in% c(1:3))
+
+sf_pums_wts <- sf_pums_predict %>%
+  left_join(pums_2019_1yr_wts,
+            by = "SERIALNO") %>%
+  select(starts_with("WGTP"), -WGTP.x, -WGTP.y)
+
+
+```
+
+```{r}
+logit_survey_design <- svrepdesign(
+  data = sf_pums_predict,
+  type = "ACS",
+  repweights = sf_pums_wts,
+  weights = ~as.numeric(WGTP)
+)
+```
+
+```{r}
+logit_survey_model <- svyglm(
+  formula = leadrisk ~ units + pumas + tenure + move,
+  family = quasibinomial(),
+  design = logit_survey_design
+)
+
+summary(logit_survey_model)
+```
+
+```{r}
+#exp(coef(logit_survey_model))
+```
+
+```{r}
+predict(logit_survey_model, data.frame(random), type = "response")
+```
+
+The weighted model predicted a similar value to that of the linear model. 
