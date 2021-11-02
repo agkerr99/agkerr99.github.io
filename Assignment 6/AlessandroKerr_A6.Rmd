@@ -263,3 +263,32 @@ predict(logit_survey_model, data.frame(random), type = "response")
 ```
 
 The weighted model predicted a similar value to that of the linear model. 
+
+```{r}
+
+logit_predict <- predict(logit_survey_model, sf_pums_factors, type = "response")
+
+sf_pums_logit <- sf_pums_factors %>%
+  cbind(logit_predict)
+
+```
+
+```{r}
+summary_2x2 <-
+  sf_pums_predict %>% 
+  mutate(
+    leadrisk = ifelse(
+      leadrisk == 1, 
+      "Yes (Leadrisk)", 
+      "No (Leadrisk)"
+    )
+  ) %>% 
+  pull(leadrisk) %>% 
+  table(logit_predict>=0.1)
+
+summary_2x2
+```
+
+There are some key differences between the previous model and the weighted model. Now, there were 11 cases of leadrisk that the model accurately predicted. There were 2129 cases where the model correctly predicted there is no lead risk. Conversely, there were 98 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 26 cases where the model predicted no lead risk, but they actually did have one. 
+
+Based on their threshold score of 10%, they would mail out 109 packages. Based on the model, it is estimated that 11/109, or 10% of postcards would actually go to low-income households with children. 
