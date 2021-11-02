@@ -205,7 +205,9 @@ summary_2x2
 
 The following can be stated about the summary of the model. There were 4 cases of leadrisk that the model accurately predicted. There were 2200 cases where the model correctly predicted there is no lead risk. Conversely, there were 27 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 33 cases where the model predicted no lead risk, but they actually did have one. 
 
-Based on the prediction, they would mail out 37 packages. 
+In simple heuristics, the households that typically exceeded the threshold were single family houses,  mostly rented or occupied without rent, and had been moved into 2-10 years ago. 
+
+Based on their threshold score of 10%, they would mail out 31 packages. Based on the model, it is estimated that 4/31, or 13% of postcards would actually go to low-income households with children. In the raw data, there were 37 households with a leadrisk. Therefore, 4/37, or 11% of all at-risk children are likely to be reached. 
 
 #PART 7
 
@@ -232,6 +234,8 @@ sf_pums_wts <- sf_pums_predict %>%
 ```
 
 ```{r}
+library(survey)
+
 logit_survey_design <- svrepdesign(
   data = sf_pums_predict,
   type = "ACS",
