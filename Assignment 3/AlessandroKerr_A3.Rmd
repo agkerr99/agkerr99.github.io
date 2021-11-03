@@ -17,13 +17,13 @@ library(tigris)
 library(leaflet)
 library(censusapi)
 library(lubridate)
-library(dplyr)
+library(dplyr) 
 ```
 
 ```{r}
 #IMPORT PUMS DATA
 
-Sys.setenv(CENSUS_KEY="0f0e2bffc9d96d5405bcb932e25318a4edb32602")
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
 
 temp <- tempfile()
 download.file("https://www2.census.gov/programs-surveys/acs/data/pums/2019/1-Year/csv_hca.zip",destfile = temp)
@@ -110,16 +110,13 @@ bay_pums_heatrisk<-
       0
     )
   ) %>%
-  dplyr::group_by(PUMA) %>%
-  dplyr::summarize(perc_elderly_or_children_refr = 
-               sum(elderly_or_children_refr, na.rm= T)/sum(WGTP, na.rm = T)*100
-  ) %>%
+  select(PUMA, elderly_or_children_refr) %>%
   left_join(
     bay_pumas %>%
       select(PUMACE10),
     by = c("PUMA" = "PUMACE10") 
   ) %>%
-    st_as_sf()
+  st_as_sf()
   
 
 ```
@@ -129,26 +126,26 @@ bay_pums_heatrisk<-
 
 pums_pal <- colorNumeric(
   palette = "Purples",
-  domain = bay_pums_heatrisk$perc_elderly_or_children_refr
+  domain = bay_pums_heatrisk$elderly_or_children_refr
 )
 ```
 
 
-The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning or refrigeratior, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditioning, age and access to refrigeration were chosen as the factor to consider in more detail. As a result, residents were filtered for those who were elderly people (age 65+), or young people (under age 6), and who had no refrigerator. See the map below characterizing the Bay Area based on the percentage of elderly people or young children with no refrigerator (at an elevated risk for extreme-heat impacts).
+The purpose of this exercise is to quantify or visualize a group vulnerable to the impacts of extreme heat events. Using the PUMS data from the 2019 survey, a map of the Bay Area can be produced highlighting this vulnerability. During the group discussions on Tuesday, October 5th, and Thursday, October 7th, factors that made groups susceptible to the effects of extreme heat were discussed. Factors such as access to shade, air-conditioning or refrigerator, pre-existing health conditions, and old/young age were considered. Using the proposed factors, the PUMS data structure dictionary was consulted. Given the lack of data relating to health conditions, or household air conditioning, age and access to refrigeration were chosen as the factor to consider in more detail. As a result, residents were filtered for those who were elderly people (age 65+), or young people (under age 6), and who had no refrigerator. See the map below characterizing the Bay Area based on the percentage of elderly people or young children with no refrigerator (at an elevated risk for extreme-heat impacts).
 
 ```{r}
 leaflet() %>%
   addTiles() %>% 
   addPolygons(
     data = bay_pums_heatrisk,
-    fillColor = ~pums_pal(perc_elderly_or_children_refr),
+    fillColor = ~pums_pal(elderly_or_children_refr),
     color = "white",
     opacity = 0.5,
     fillOpacity = 0.5,
     weight = 1,
     label = ~paste0(
-      round(perc_elderly_or_children_refr), 
-      "%Elderly persons or children with no refrigerator (at elevated risk for heat-extreme impacts)"
+      round(elderly_or_children_refr), 
+      "Elderly persons or children with no refrigerator (at elevated risk for heat-extreme impacts)"
     ),
     highlightOptions = highlightOptions(
       weight = 2,
@@ -158,8 +155,8 @@ leaflet() %>%
   addLegend(
     data = bay_pums_heatrisk,
     pal = pums_pal,
-    values = ~perc_elderly_or_children_refr,
-    title = "% Elderly persons or <br> children and no Refrigerator <br> (at elevated risk for <br> heat-extreme impacts)"
+    values = ~elderly_or_children_refr,
+    title = "Elderly persons or <br> children and no Refrigerator <br> (at elevated risk for <br> heat-extreme impacts)"
   )
 
 
