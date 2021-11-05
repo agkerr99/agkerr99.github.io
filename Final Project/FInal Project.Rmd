@@ -1,0 +1,70 @@
+---
+title: "Final Project"
+author: "Alessandro Kerr"
+date: " Dec. X, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+library(lubridate)
+library(dplyr)
+library(mapview)
+```
+
+#FILTER DATA TO BAY AREA
+
+
+```{r}
+#tracts <- tracts("CA", county = c("001","013","041","055","075","081","085","095","097"),cb = T, progress_bar = F)
+
+tracts <- tracts("CA", county = 081, cb = T, progress_bar = F)
+```
+
+```{r}
+tracts_water <- tracts %>%
+  filter(AWATER > 0)
+
+mapview(tracts_water)
+
+places <- places("CA", progress_bar = F)
+
+mapview(places)
+
+
+```
+
+```{r}
+
+library(devtools)
+install_github('walkerke/tigris')
+library(tigris)
+
+smc_blocks_2020 <- blocks("CA", "San Mateo", year = 2019, progress_bar = F) %>%
+  filter(AWATER10 > 0)
+
+mapview(smc_blocks_2020)
+```
+
+
+
+```{r}
+library(zipcode)
+zipcodes <- search_county("San Mateo", "CA")
+```
+```{r}
+mapview(zipcodes)
+
+zipcodes_geo <- geocode_zip(zipcodes)
+```
+
