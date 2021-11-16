@@ -1,0 +1,158 @@
+---
+title: "Week 8 testing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+fire <- sample(
+  c(0,1),
+  size = 10000,
+  replace = T
+)
+  
+smoke <- ifelse(
+  fire == 1,
+  sample(
+  c(0,1),
+  size = 10000,
+  replace = T,
+  prob = c(0.05,0.95)
+  ),
+  sample(
+  c(0,1),
+  size = 10000,
+  replace = T,
+  prob = c(0.8,0.2) #chances that there is no fire but smoke doesnt or does exist (20% chance of smoke without fire)
+))
+
+  
+alarm <-  ifelse(
+  smoke == 1,
+  sample(
+  c(0,1),
+  size = 10000,
+  replace = T,
+  prob = c(0.01,0.99) #chance there is smoke and alarm goes off
+  ),
+  sample(
+  c(0,1),
+  size = 10000,
+  replace = T,
+  prob = c(0.99,0.01) #chance if no smoke but alarm goes off
+))
+  
+data <- data.frame(
+  fire = fire,
+  smoke = smoke, 
+  alarm = alarm
+)
+
+model <- glm(
+  alarm ~ fire, 
+  data = data, 
+  family = quasibinomial()
+)
+
+summary(model)
+```
+
+```{r}
+exp(model$coefficients[2])/(exp(model$coefficients[2]) +1) #probability of alarm if fire
+```
+
+```{r}
+model <- glm(
+  alarm ~ fire+smoke, 
+  data = data, 
+  family = quasibinomial()
+)
+
+summary(model)
+exp(model$coefficients[2])/(exp(model$coefficients[2]) +1)
+
+#We coded it so that fire only occurs from smoke. So when we control smoke, there is no relationship between alarm and fire.
+```
+
+```{r}
+age <- sample(
+  5:10,
+  size = 10000,
+  replace = T
+)
+  
+shoe <- age + rnorm(10000) #assumes mean of 0 and SD of 1
+  
+reading <- age*2 -5 + rnorm(10000)*1.5
+  
+data <- data.frame(
+  age = age,
+  shoe = shoe,
+  reading = reading
+)
+
+model <- lm(
+  reading ~ shoe, #reading level to predict shoe size
+  data = data
+)
+summary(model)
+
+#for every increase in shoe size, 1.49 increase in reading ability
+```
+
+```{r}
+model <- lm(
+  reading ~ shoe + age,
+  data = data
+)
+
+summary(model)
+
+# if control for age, no relationship between shoe and reading.
+#no effect on reading from shoe size. Need to control for age. 
+```
+
+```{r}
+talent <- rnorm(10000)
+  
+beauty <- rnorm(10000)
+  
+celebrity <- ifelse(
+  talent + beauty > 2,
+  1,
+  0
+)
+  
+data <- data.frame(
+  talent = talent,
+  beauty = beauty,
+  celebrity = celebrity
+)
+```
+
+```{r}
+
+model <- glm(
+  celebrity ~ talent,
+  data = data,
+  family = quasibinomial()
+)
+
+summary(model)
+
+model <- lm(
+  beauty ~ talent + celebrity,
+  data = data
+)
+
+summary(model)
+
+#if talent is 1 above average, significant higher chance of being a celebrity. Can repeat with beauty.
+# if control for celebrity. beauty will be hgiher, but since threshold of 2, do not need talent (why its negative).
+#created false colider situation. Should not control for something in this case since can skew.
+
+```
+
