@@ -1,0 +1,39 @@
+
+```{r}
+library(flexdashboard)
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(plotly)
+
+pge_data_raw <- readRDS("pge_data_raw.rds")
+
+bay_zips <- readRDS("bay_zips.rds")
+
+pge_data <-
+  pge_data_raw %>% 
+  filter(
+    CUSTOMERCLASS %in% c(
+      "Elec- Commercial",
+      "Elec- Residential"
+    )
+  ) %>% 
+  group_by(
+    MONTH, 
+    YEAR, 
+    CUSTOMERCLASS
+  ) %>% 
+  summarize(
+    TOTALKBTU = sum(TOTALKBTU, na.rm = T)
+  ) %>% 
+  mutate(
+    DATE = 
+      paste(
+        YEAR,
+        MONTH, 
+        "01",
+        sep="-"
+      ) %>% as.Date()
+  )
+```
+
