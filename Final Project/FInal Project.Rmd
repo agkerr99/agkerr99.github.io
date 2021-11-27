@@ -68,3 +68,54 @@ mapview(zipcodes)
 zipcodes_geo <- geocode_zip(zipcodes)
 ```
 
+```{r}
+
+
+
+
+```
+```{r}
+bay_zips_water <- bay_zips %>%
+  filter(AWATER10 >0)
+
+mapview(bay_zips)
+
+```
+
+```{r}
+# library(dataRetrieval)
+# vignette("dataRetrieval", package = "dataRetrieval")
+# 
+# #GET DAILY WATER DATA
+# 
+# siteNumbers <- c("11162630", "373025122065901")
+# siteInfo <- readNWISsite(siteNumbers) #Gives Site Number Details
+# 
+# siteNumber1 <- "11162630" #Half Moon Bay Water Station
+# parameterCd <- "00065"
+# startDate <- "2021-01-01"
+# endDate <- "2021-11-23"
+# statCd <- "00001"
+# 
+# gage_height <- readNWISdv(siteNumber1,parameterCd,startDate,endDate,statCd)
+```
+
+```{r}
+bay_analyze <- bay_filtered %>%
+  st_centroid() %>%
+  mutate(rw_dist = st_distance(geometry, rw_flood$geometry), 
+        sf_dist = st_distance(geometry, sf_flood$geometry)) %>%
+  mutate(station = ifelse(rw_dist>sf_dist, 1, 0)) %>%
+  st_drop_geometry() %>% 
+  left_join(bay_blocks %>% select(GEOID)) %>% 
+  st_as_sf() %>% 
+  mutate(water_height = ifelse(station ==1, sf_flood$water_height, rw_flood$water_height))
+
+
+  bay_analyze$station = as.character(bay_analyze$station)
+  
+
+
+ mapview(bay_analyze, zcol = "station")
+```
+

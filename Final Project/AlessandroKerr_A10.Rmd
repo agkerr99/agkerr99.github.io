@@ -1,0 +1,193 @@
+---
+title: "AlessandroKerr_A10"
+author: "Alessandro Kerr"
+date: " Dec. X, 2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+library(lubridate)
+library(dplyr)
+library(mapview)
+```
+
+
+
+```{r}
+#GET BLOCK GROUP DATA
+
+bay_blocks <- block_groups("CA", county = c("081"))
+```
+
+```{r}
+#FILTER TO WATERFRONT PARCELS
+
+`%!in%` <- Negate(`%in%`)
+
+bay_filtered <- bay_blocks %>%
+  filter(BLKGRPCE != 0, AWATER >0) %>% #filter out water only blocks and those that are on water 
+  mutate(row = row_number()) %>%
+  filter(row %!in% c(1,17,19,26,27,29,33,44,45,46,48,52,57,68))
+
+```
+
+```{r}
+#RETRIEVE WATER LEVEL DATA
+
+library(rnoaa)
+Sys.setenv(NOAA_KEY = "sNuvvrmlpMszyuXZLaIYuniAyZVyToGK")
+Key <- Sys.getenv("NOAA_KEY")
+
+#Get SF Station water data
+sf_water_level <- coops_search(
+  begin_date = 20210101,
+  end_date = 20211030,
+  station_name = 9414290,
+  datum = "navd",
+  product = "hourly_height"
+)
+
+#Get Redwood City water level data 
+rw_water_level <- coops_search(
+  begin_date = 20210101,
+  end_date = 20211030,
+  station_name = 9414523,
+  datum = "navd",
+  product = "hourly_height"
+)
+
+sf_geo <- sf_water_level$metadata$lat %>%
+  as.data.frame() %>%
+  rename(lat = ".") %>%
+  mutate(lon = sf_water_level$metadata$lon )  #getting water gauge location
+
+sf_flood <- sf_water_level$data %>%
+  arrange(desc(v)) %>%
+  .[1:10,] %>%
+  transmute(water_height = mean(v)) %>% #San Francisco datum
+  slice(1) %>%
+  mutate(sf::st_as_sf(sf_geo, coords = c("lon", "lat"),
+                          crs = 4269)) #taking top 10 hourly levels as peak water levels 
+
+rw_geo <- rw_water_level$metadata$lat %>%
+  as.data.frame() %>%
+  rename(lat = ".") %>%
+  mutate(lon = rw_water_level$metadata$lon )  #getting water gauge location
+
+rw_flood <- rw_water_level$data %>%
+  arrange(desc(v)) %>%
+  .[1:10,] %>%
+  transmute(water_height = mean(v)) %>% #redwood city datum
+  slice(1) %>%
+  mutate(sf::st_as_sf(rw_geo, coords = c("lon", "lat"),
+                          crs = 4269))
+
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addMarkers(
+    lat = as.numeric(sf_water_level$metadata$lat),
+    lng = as.numeric(sf_water_level$metadata$lon)
+  ) %>%
+  addMarkers(
+    lat = as.numeric(rw_water_level$metadata$lat),
+    lng = as.numeric(rw_water_level$metadata$lon)
+  )
+
+```
+
+
+```{r}
+#CALCULATE CLOSEST WATER LEVEL STATION TO EACH CENSUS BLOCK
+
+library(geosphere)
+library(sp)
+
+bay_point <- as.data.frame(37.624859) %>%
+  rename(lat = "37.624859") %>%
+  mutate(lon = -122.134324) %>%
+  sf::st_as_sf(., coords = c("lon", "lat"), crs = 4269)
+pacific_point <- as.data.frame(37.510677) %>%
+  rename(lat = "37.510677") %>%
+  mutate(lon = -122.687700) %>%
+  sf::st_as_sf(., coords = c("lon", "lat"), crs = 4269)
+
+#choosing points that will split up pacific and SF Bay based on distance
+
+bay_analyze <- bay_filtered %>%
+  st_centroid() %>%
+  mutate(bay_dist = st_distance(geometry, bay_point), 
+        pac_dist = st_distance(geometry, pacific_point)) %>%
+  mutate(station = ifelse(bay_dist>pac_dist, 1, 0)) %>%
+  st_drop_geometry() %>% 
+  left_join(bay_blocks %>% select(GEOID)) %>% 
+  st_as_sf() %>% 
+  mutate(water_height = ifelse(station ==1, sf_flood$water_height, rw_flood$water_height))
+
+
+bay_analyze$station = as.character(bay_analyze$station)
+  
+
+
+ mapview(bay_analyze, zcol = "station")
+```
+
+
+
+```{r}
+#GET ELEV DATA
+
+
+library(elevatr)
+
+smc <- counties("CA") %>% filter(NAME %in% "San Mateo")
+
+DEM <- get_elev_raster(locations = smc, z = 12, clip = "locations")
+
+
+plot(DEM)
+```
+
+```{r}
+#GET ELEV DATA
+
+smc_elevs <- bay_analyze %>%
+  st_centroid() %>%
+  mutate(elev = get_elev_point(geometry, src = "epqs")) %>%
+  st_drop_geometry() %>% 
+  left_join(bay_blocks %>% select(GEOID)) %>% 
+  st_as_sf()
+
+  
+```
+
+```{r}
+# DETERMINE CURRENT FLOOD RISK BASED ON WORST YEARLY STORMS
+smc_flood <- smc_elevs %>%
+  select(GEOID, water_height, elev) %>% mutate(elev = elev$elevation*3.2808) %>%
+  mutate(flood_risk = ifelse(water_height>elev, 1,0))
+
+smc_flood$flood_risk = as.character(smc_flood$flood_risk)
+  
+mapview(smc_flood, zcol = "flood_risk")
+
+
+#compared to https://coast.noaa.gov/slr/#/layer/slr/0/-13594512.099515028/4519452.882107551/11/satellite/none/0.8/2050/interHigh/midAccretion actually fairly similar results
+```
+
+```{r}
+saveRDS(smc_flood, "smc_flood.rds")
+```
+

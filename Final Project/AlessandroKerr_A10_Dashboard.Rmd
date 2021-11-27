@@ -1,0 +1,77 @@
+---
+title: "AlessandroKerr_A10_Dashboard"
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(plotly)
+library(mapview)
+
+smc_flood <- readRDS("smc_flood.rds")
+
+```
+
+
+Inputs {.sidebar}
+-------------------------------------
+
+  
+```{r}
+selectInput(
+  inputId = "water_rise",
+  label = "Sea Level Rise (ft):",
+  choices = c(1,2,3,4,5,6,7,8,9,10),
+  selected = 1
+)
+```
+
+Column
+-------------------------------------
+
+```{r}
+leafletOutput("plot")
+```
+
+
+```{r, context = "server"}
+
+#behind the scenes code
+
+observeEvent(input$water_rise,{
+  
+  smc_flood2 <- smc_flood %>%
+    select(-flood_risk) %>%
+    mutate(water_height2 = water_height + input$water_rise) %>%
+    mutate(flood_risk = ifelse(water_height2>elev, 1,0))
+    
+    res_pal <- colorNumeric(
+      palette = "Paired",
+      domain = c(0,1))
+    
+    output$plot < renderLeaflet({
+      leaflet() %>% 
+      addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+      addPolygons(
+        data = smc_flood2,
+        fillColor = ~res_pal(as.numeric(smc_flood2$flood_risk)),
+        color = "white",
+        opacity = 0.5,
+        fillOpacity = 0.5,
+        weight = 1,
+        label = paste0("Flood Risk =", smc_flood2$flood_risk)
+      )
+    })
+    
+    
+})
+```
+
+
+
