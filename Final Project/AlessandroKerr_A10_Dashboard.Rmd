@@ -48,7 +48,7 @@ observeEvent(input$water_rise,{
   
   smc_flood2 <- smc_flood %>%
     select(-flood_risk) %>%
-    mutate(water_height2 = water_height + input$water_rise) %>%
+    mutate(water_height2 = water_height + as.numeric(input$water_rise)) %>%
     mutate(flood_risk = ifelse(water_height2>elev, 1,0))
     
     res_pal <- colorNumeric(

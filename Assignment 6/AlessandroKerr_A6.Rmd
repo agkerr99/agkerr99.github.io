@@ -188,26 +188,31 @@ sf_pums_predict <- sf_pums_factors %>%
 ```
 
 ```{r}
-summary_2x2 <-
+predicted1 <-
   sf_pums_predict %>% 
   mutate(
     leadrisk = ifelse(
       leadrisk == 1, 
       "Yes (Leadrisk)", 
-      "No (Leadrisk)"
-    )
-  ) %>% 
-  pull(leadrisk) %>% 
-  table(full_predict>=0.1)
+      "No (Leadrisk)")) %>%
+  mutate(
+    pred_yes = ifelse(
+        full_predict >0.1, WGTP, 0)) %>%
+  mutate(
+      pred_no = ifelse(
+        full_predict < 0.1, WGTP, 0)) %>%
+  group_by(leadrisk) %>%
+  summarize(pred_yes = sum(as.numeric(pred_yes)), pred_no = sum(as.numeric(pred_no)))
 
-summary_2x2
+predicted1
+
 ```
 
-The following can be stated about the summary of the model. There were 4 cases of leadrisk that the model accurately predicted. There were 2200 cases where the model correctly predicted there is no lead risk. Conversely, there were 27 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 33 cases where the model predicted no lead risk, but they actually did have one. 
+The following can be stated about the summary of the model. There were 421 cases of leadrisk that the model accurately predicted. There were 221620 cases where the model correctly predicted there is no lead risk. Conversely, there were 2777 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 3988 cases where the model predicted no lead risk, but they actually did have one. 
 
 In simple heuristics, the households that typically exceeded the threshold were single family houses,  mostly rented or occupied without rent, and had been moved into 2-10 years ago. 
 
-Based on their threshold score of 10%, they would mail out 31 packages. Based on the model, it is estimated that 4/31, or 13% of postcards would actually go to low-income households with children. In the raw data, there were 37 households with a leadrisk. Therefore, 4/37, or 11% of all at-risk children are likely to be reached. 
+Based on their threshold score of 10%, they would mail out 3198 packages. Based on the model, it is estimated that 421/3198, or 13% of postcards would actually go to low-income households with children. In the raw data, there were 4409 households with a leadrisk. Therefore, 421/4409, or 9.5% of all at-risk children are likely to be reached. 
 
 #PART 7
 
@@ -274,21 +279,25 @@ sf_pums_logit <- sf_pums_factors %>%
 ```
 
 ```{r}
-summary_2x2 <-
-  sf_pums_predict %>% 
+predicted2 <-
+  sf_pums_logit %>% 
   mutate(
     leadrisk = ifelse(
       leadrisk == 1, 
       "Yes (Leadrisk)", 
-      "No (Leadrisk)"
-    )
-  ) %>% 
-  pull(leadrisk) %>% 
-  table(logit_predict>=0.1)
+      "No (Leadrisk)")) %>%
+  mutate(
+    pred_yes = ifelse(
+        response >0.1, WGTP, 0)) %>%
+  mutate(
+      pred_no = ifelse(
+        response < 0.1, WGTP, 0)) %>%
+  group_by(leadrisk) %>%
+  summarize(pred_yes = sum(as.numeric(pred_yes)), pred_no = sum(as.numeric(pred_no)))
 
-summary_2x2
+predicted2
 ```
 
-There are some key differences between the previous model and the weighted model. Now, there were 11 cases of leadrisk that the model accurately predicted. There were 2129 cases where the model correctly predicted there is no lead risk. Conversely, there were 98 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 26 cases where the model predicted no lead risk, but they actually did have one. 
+There are some key differences between the previous model and the weighted model. Now, there were 1835 cases of leadrisk that the model accurately predicted. There were 214,964 cases where the model correctly predicted there is no lead risk. Conversely, there were 9433 cases where households did not have a lead risk, but the model predicted they did. Lastly, there were 2574 cases where the model predicted no lead risk, but they actually did have one. 
 
-Based on their threshold score of 10%, they would mail out 109 packages. Based on the model, it is estimated that 11/109, or 10% of postcards would actually go to low-income households with children. 
+Based on their threshold score of 10%, they would mail out 11,268 packages. Based on the model, it is estimated that 1835/11268, or 16.2% of postcards would actually go to low-income households with children. This is a significant increase over the previous unweighted scenario. 

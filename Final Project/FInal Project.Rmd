@@ -119,3 +119,51 @@ bay_analyze <- bay_filtered %>%
  mapview(bay_analyze, zcol = "station")
 ```
 
+```{r}
+
+library(flexdashboard)
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(plotly)
+library(mapview)
+
+smc_flood <- readRDS("smc_flood.rds")
+
+water_rise = 1
+
+    smc_flood %>%
+    select(-flood_risk) %>%
+    mutate(water_height2 = water_height + water_rise) %>%
+    mutate(flood_risk = ifelse(water_height2>elev, 1,0)) 
+    
+    
+    smc_flood$flood_risk = as.character(smc_flood$flood_risk) 
+    
+    
+    mapview(smc_flood, zcol = "flood_risk")
+```
+
+```{r}
+ smc_flood2 <- smc_flood %>%
+    select(-flood_risk) %>%
+    mutate(water_height2 = water_height + 1) %>%
+    mutate(flood_risk = ifelse(water_height2>elev, 1,0))
+
+res_pal <- colorNumeric(
+    palette = "Paired",
+    domain = c(0,1))
+
+leaflet() %>% 
+      addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+      addPolygons(
+        data = smc_flood2,
+        fillColor = ~res_pal(as.numeric(smc_flood2$flood_risk)),
+        color = "white",
+        opacity = 0.5,
+        fillOpacity = 0.5,
+        weight = 1,
+        label = paste0("Flood Risk =", smc_flood2$flood_risk)
+      )
+```
+
