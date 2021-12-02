@@ -167,3 +167,31 @@ leaflet() %>%
       )
 ```
 
+```{r}
+c(
+      "B06009_001E",
+      "B06009_002E",
+      "B06009_003E",
+      "B19001_001E",
+      "B19001_014E",
+      "B19001_015E",
+      "B19001_016E",
+      "B19001_017E",
+      "B19001A_001E"
+    )
+
+smc_county <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME == "San Mateo")
+
+smc_blocks <- bay_blocks %>%
+  st_centroid() %>%
+  .[smc_county,] %>%
+  st_drop_geometry() %>% 
+  left_join(bay_blocks %>% select(GEOID)) %>% 
+  st_as_sf()
+
+smc_acs <- bay_multiple_tract %>%
+  filter(tract %in% smc_blocks$GEOID)
+```
+

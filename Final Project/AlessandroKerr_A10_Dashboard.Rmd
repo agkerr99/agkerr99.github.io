@@ -36,7 +36,7 @@ Column
 -------------------------------------
 
 ```{r}
-leafletOutput("plot")
+leafletOutput("map")
 ```
 
 
@@ -52,10 +52,10 @@ observeEvent(input$water_rise,{
     mutate(flood_risk = ifelse(water_height2>elev, 1,0))
     
     res_pal <- colorNumeric(
-      palette = "Paired",
+      palette = "PiYG",
       domain = c(0,1))
     
-    output$plot < renderLeaflet({
+    output$map <- renderLeaflet({
       leaflet() %>% 
       addProviderTiles(provider = providers$CartoDB.Positron) %>% 
       addPolygons(

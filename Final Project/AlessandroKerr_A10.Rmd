@@ -1,7 +1,7 @@
 ---
-title: "AlessandroKerr_A10"
+title: "AlessandroKerr_FinalProject"
 author: "Alessandro Kerr"
-date: " Dec. X, 2021"
+date: " Dec. 3, 2021"
 output: html_document
 ---
 
@@ -23,12 +23,22 @@ library(dplyr)
 library(mapview)
 ```
 
+Background
 
+The shoreline is an important and valuable area, contributing to ecosystems and recreation on a daily basis (NYS DEC, 2010). However, climate change threatens the shoreline through sea level rise. The effects of sea level rise are already being felt in California, with more extensive coastal flooding and erosion occurring during large storms (2017). In the past several years, projections have increased for sea level rise under high emission scenarios, largely due to better continental ice sheet modelling (COST, 2017). With the glaciological threshold nearing, further emissions could lead to irreversible and rapid ice mass loss, raising the sea level substantially (2017). 
+
+Coastal erosion and flooding from sea level rise are two key issues that shoreline communities will have to combat. With over 1100 miles of shoreline in California, there are concerns about how the state will adapt to future conditions (Los Angeles Times, 2019). In the past one hundred years, the sea only rose nine inches. Yet, probabilistic approaches predict up to two inches per year of sea-level rise, which would mark a ten foot increase from current levels (COST, 2017). Current policy decisions relating to coastal preparation and climate change will shape the way the California coast looks in one hundred years. 
+
+This project will aim to analyze the Bay Area coastline based on potential sea level rise scenarios. Using a sensitivity analysis, several sea-level rise scenarios will be tested in order to measure the flooding/erosion risk attributed to different census-block groups. From here, the at risk areas can be analyzed for social and equity issues. The articles and resources that motivated this project can be seen in the resources section of this memo. In particular, the article in the Los Angeles Times about the “grim” choices for the California coast was of special interest. 
+
+Methodology and Results
+
+Coastal flood risk will be outlined, and will be based on several factors. The first step was to retrieve block group data for San Mateo County, which was chosen as the region of analysis. From here, they were filtered to block groups that had a non-zero area of water. Due to lakes and ponds, some groups had to be filtered manually. Next, the water level data had to be retrieved. This was completed through the "rnoaa" package, which is an R-package that allows for National Oceanic and Atmospheric Administration water-level data to be automatically fetched. Data for the year of 2021 was selected, at the hourly-peak level. From here, to avoid for extreme outliers, the average of the top 10 peak values was calculated. This would serve as the current "flood level", or the current highest water levels that occur during a storm. The locations of the two closest water-level stations to San Mateo County can be seen on the map below. 
 
 ```{r}
 #GET BLOCK GROUP DATA
 
-bay_blocks <- block_groups("CA", county = c("081"))
+bay_blocks <- block_groups("CA", county = c("081"), progress_bar = F)
 ```
 
 ```{r}
@@ -43,7 +53,7 @@ bay_filtered <- bay_blocks %>%
 
 ```
 
-```{r}
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
 #RETRIEVE WATER LEVEL DATA
 
 library(rnoaa)
@@ -109,6 +119,8 @@ leaflet() %>%
 ```
 
 
+It can be noted that the Pacific Ocean and the San Francisco (SF) Bay have fairly different water levels. For this point, the census-blocks were filtered based on the body of water they lie on, allowing the appropriate water-level station to be used. This was completed by selecting a geographic point east of the Bay, and a geographic point west of the Bay. Ultimately, by measuring the distance to each point from the centroid of each census-block, the minimum distance was selected. This divided the census-blocks into groups as seen below based on the body of water they lie on. From here, the water-level data for the SF station was atrributed to those that lie on the Pacific Ocean, and the Redwood city station was connected to those that lie on the SF Bay. 
+
 ```{r}
 #CALCULATE CLOSEST WATER LEVEL STATION TO EACH CENSUS BLOCK
 
@@ -144,9 +156,9 @@ bay_analyze$station = as.character(bay_analyze$station)
  mapview(bay_analyze, zcol = "station")
 ```
 
+With the water-level height under storm conditions completed, the elevation of each census-block needed to be calculated. This would allow the water-level height to be compared with the elevation of each census-block to measure flood risk. This was completed through the use of the 'elevatr' library in R, which allows for the retrieval of a Digital-Elevation-Model, or DEM. The DEM file for San Mateo county can be seen below. 
 
-
-```{r}
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
 #GET ELEV DATA
 
 
@@ -154,13 +166,17 @@ library(elevatr)
 
 smc <- counties("CA") %>% filter(NAME %in% "San Mateo")
 
-DEM <- get_elev_raster(locations = smc, z = 12, clip = "locations")
+DEM <- get_elev_raster(locations = smc, z = 12, clip = "locations", progress_bar = F)
 
 
 plot(DEM)
 ```
 
-```{r}
+With this, the elevation for the centroid of each census-block was calculated using the get_elev_point() function of the elevatr library. Although this is an estimation, it serves as a simplification for this analysis. Future work could use st_sample() to get a sample of many points within a census-block, filter them by those that are closest to the water, then take the lowest points out of that group to get a better idea of how points near the water are susceptible to flood damage. Better yet, a flood risk analysis could be completed using the entire DEM file. This scenario has been completed and can be seen at: https://coast.noaa.gov/slr/#/layer/slr/0/-13594512.099515028/4519452.882107551/11/satellite/none/0.8/2050/interHigh/midAccretion
+
+From here, the elevation was compared to the closest water height data to measure flood risk. The flood-risk map for the base scenario can be seen below. 
+
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
 #GET ELEV DATA
 
 smc_elevs <- bay_analyze %>%
@@ -191,3 +207,195 @@ mapview(smc_flood, zcol = "flood_risk")
 saveRDS(smc_flood, "smc_flood.rds")
 ```
 
+However, the basis of this project is to determine the future flood risk. Some estimates predict that by 2050, the ocean levels could rise up to 10 feet. In this project, ten incremental increases of one-foot will be measured and modeled. For now , see the flood-risk maps for the 1-foot rise and 10-foot rise scenario below. 
+
+```{r}
+#FUTURE FLOOD RISK
+
+smc_future_flood <- smc_flood
+
+for(i in 1:10){
+  smc_future_flood[ , paste0("flood", i)] = ifelse(smc_future_flood$water_height + i > smc_future_flood$elev ,1,0)
+}
+
+smc_future_flood$flood1 = as.character(smc_future_flood$flood1)
+smc_future_flood$flood10 = as.character(smc_future_flood$flood10)
+
+mapview(smc_future_flood, zcol = "flood1") + mapview(smc_future_flood, zcol = "flood10")
+
+
+```
+
+
+An effective way to display the same flood-risk map and allow for a user-input is through a dashboard. For this reason, an R dashboard was created using Shinyapps. It allows the user to input a desired sea-level rise scenario, and outputs the flood-risk map for San Mateo County. The dashboard can be found at:
+
+https://agkerr.shinyapps.io/AlessandroKerr_A10_Dashboard/
+
+If you compare the results on the Shinyapp map to those on the NOAA flood map for the Bay Area, you will notice similar results.
+
+Now that the question of "how do we classify flood risk?" has been answered, the question of "who is at risk?" still remains. Ultimately, having this flood-risk data allows specific factors to be compared with flood-risk. Regression analysis will be completed to determine if there is any correlation between several factors such as income, education, or being Hispanic with respect to having an increased (or decreased) flood risk. Perhaps the analysis will find non-significant results.. Nonetheless, it is important to know if any key relationships exist and if any metrics should be further investigated from a flood-risk perspective. 
+
+```{r}
+#REGRESSION - bring in income - compare to water height and flood risk?
+# equity analysis does not really make sense because it is more relating to proportion of population that is within certain outcome brackets. In this case may make more sense to just do a regression because it is a binary result?
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+
+
+smc_income <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "block group:*",
+    regionin = "state:06+county:081",
+    vars = c(
+      "B19013_001E",
+      "B06009_001E",
+      "B06009_002E",
+      "B06009_003E",
+      "B19001_001E",
+      "B19001_014E",
+      "B19001_015E",
+      "B19001_016E",
+      "B19001_017E",
+      "B19001A_001E"
+    )
+  ) %>% 
+  mutate(
+    tract = paste0(state, county, tract, block_group),
+  ) %>% 
+  filter(
+    B19013_001E != -666666666,
+  ) %>%
+  rename(income = "B19013_001E") %>%
+  select(tract, income)
+
+```
+
+
+First, a regression of flood risk (in the 10 foot rise scenario) and income was completed. The results can be found below.  
+
+
+```{r}
+#take flood 5 - middle 
+
+flood_10_income <- smc_future_flood %>%
+  select(GEOID, flood10) %>%
+  left_join(smc_income, by = c("GEOID"="tract"))
+
+logit_model <- glm(
+  as.numeric(flood10) ~ income,
+  family = quasibinomial(),
+  data = flood_10_income
+)
+
+summary(logit_model)
+```
+
+
+In this case, there was essentially no correlation between income and flood risk. The coefficient was 4.65e-06, with a significance of 0.558, much above the 0.05 desired level. Based on this, it seems that in San Mateo County, there is no correlation between income level and flood risk. 
+
+Next, the Hispanic population in the Bay Area was looked at, as they are often recepients of unequitable situations. In this case, the percent-Hispanic for the census block would be compared against the flood risk.
+
+
+```{r}
+
+smc_latino <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "block group:*",
+    regionin = "state:06+county:081",
+    vars = c(
+      "B03003_001E",
+      "B03003_002E",
+      "B03003_003E"
+    )
+  ) %>% 
+  mutate(
+    tract = paste0(state, county, tract, block_group),
+  ) %>% 
+  mutate(perc_latino = B03003_003E/B03003_001E) %>%
+  select(tract, perc_latino)
+
+
+```
+
+```{r}
+flood_10_latino <- smc_future_flood %>%
+  select(GEOID, flood10) %>%
+  left_join(smc_latino, by = c("GEOID"="tract"))
+
+logit_model <- glm(
+  as.numeric(flood10) ~ perc_latino,
+  family = quasibinomial(),
+  data = flood_10_latino)
+
+summary(logit_model)
+```
+
+
+It is suggested that there is a negative trend between percent Latin and flood risk, which implies that as the percent Latin goes down in a census block, the flood risk increases. However, the results are once again not significant due to a P-value greater than 0.05.
+
+Finally, education level and flood risk at the census-block level will be analysed. 
+
+
+```{r}
+
+smc_educ <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "block group:*",
+    regionin = "state:06+county:081",
+    vars = c(
+      "B15003_001E",
+      "B15002_021E",
+      "B15002_022E",
+      "B15002_023E",
+      "B15002_024E",
+      "B15002_025E"
+    )
+  ) %>% 
+  mutate(
+    tract = paste0(state, county, tract, block_group),
+  ) %>% 
+  mutate(perc_educ = (B15002_021E + B15002_022E + B15002_023E + B15002_024E + B15002_025E)) %>%
+  select(tract, perc_educ)
+
+
+```
+
+```{r}
+flood_10_educ <- smc_future_flood %>%
+  select(GEOID, flood10) %>%
+  left_join(smc_educ, by = c("GEOID"="tract"))
+
+logit_model <- glm(
+  as.numeric(flood10) ~ perc_educ,
+  family = quasibinomial(),
+  data = flood_10_educ)
+
+summary(logit_model)
+```
+
+Ultimately, while there is a suggested negative relationship between percent education and food risk (that is, when percent education increased, flood risk decreased), it is not significant. The findings of all three of the possible regression scenarios were inconclusive. Further study could incorporate an equity analysis into census-blocks that are at flood risk and see if there are any differences compared to average data across San Mateo County. Or, different relationships, such as logarithmic could be investigated through the analysis of the residuals in each regression.
+
+To conclude, flood risk was classified, then the groups at risk were investigated. Given the challenges behind mitigating flood risk, this is surely a challenge that will move forward through this century. In addition, there is an on-going resistance to implementing engineered flood-risk solutions such as seawalls and levees. When the shoreline is "hardened" through engineered solutions, it disrupts natural sediment transport and can actually worsen erosion on adjacent properties. There are "soft" shoreline methods that can be used, completed by developing further from the ocean, or by using natural vegetation. However, in some cases it is not possible to use soft solutions and hardening methods must be relied on. Nonetheless, this project successfully presented the some of the flood-risks that San Mateo County will struggle with over the next 100 years. 
+
+References:
+
+California Ocean Science Trust (COST) (2017). Rising Seas in California: An Update on 
+Sea-Level Rise Science. Retrieved from: https://s3.documentcloud.org/documents/6168725/RISING-SEAS-SLR-FINAL-REPORT.pdf
+
+Los Angeles Times (2019). California Against the Sea. Retrieved from: 
+https://www.latimes.com/projects/la-me-sea-level-rise-california-coast/
+
+NYC DEC - New York State Department of Environmental Conservation (2010). Shoreline 
+Stabilization Techniques. Retrieved from: https://www.dec.ny.gov/docs/permits_ej_operations_pdf/stabiltechguid.pdf
