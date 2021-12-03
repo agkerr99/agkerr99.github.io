@@ -176,7 +176,7 @@ plot(DEM)
 
 With this, the elevation for the centroid of each census-block was calculated using the get_elev_point() function of the elevatr library. Although this is an estimation, it serves as a simplification for this analysis. Future work could use st_sample() to get a sample of many points within a census-block, filter them by those that are closest to the water, then take the lowest points out of that group to get a better idea of how points near the water are susceptible to flood damage. Better yet, a flood risk analysis could be completed using the entire DEM file. This scenario has been completed and can be seen at: https://coast.noaa.gov/slr/#/layer/slr/0/-13594512.099515028/4519452.882107551/11/satellite/none/0.8/2050/interHigh/midAccretion
 
-From here, the elevation was compared to the closest water height data to measure flood risk. The flood-risk map for the base scenario can be seen below. 
+From here, the elevation was compared to the closest water height data to measure flood risk. The flood-risk map for the base scenario can be seen below. Note that a "1" means the census-block is at flood risk. 
 
 ```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
 #GET ELEV DATA
