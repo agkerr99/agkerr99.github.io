@@ -53,7 +53,7 @@ bay_filtered <- bay_blocks %>%
 
 ```
 
-```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
+```{r}
 #RETRIEVE WATER LEVEL DATA
 
 library(rnoaa)
@@ -105,7 +105,7 @@ rw_flood <- rw_water_level$data %>%
                           crs = 4269))
 
 
-leaflet() %>% 
+water_points <- leaflet() %>% 
   addProviderTiles(providers$CartoDB.Positron) %>% 
   addMarkers(
     lat = as.numeric(sf_water_level$metadata$lat),
@@ -115,6 +115,8 @@ leaflet() %>%
     lat = as.numeric(rw_water_level$metadata$lat),
     lng = as.numeric(rw_water_level$metadata$lon)
   )
+
+water_points
 
 ```
 

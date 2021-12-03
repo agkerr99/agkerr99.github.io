@@ -1,0 +1,200 @@
+---
+title: "Week10Rtutorial"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(sf)
+library(mapview)
+library(tigris)
+library(censusapi)
+
+```
+
+```{r}
+point <- 
+  c(-122.23420418729398, 37.48604427888125) %>% 
+  st_point() %>% 
+  st_sfc() %>% 
+  st_set_crs(4326) #doesn't know the long/lat are degree units until right now
+
+mapview(point)
+
+buffer <- point %>%
+  st_transform(26910) %>% #metre based planar map
+  st_buffer(1600)
+
+buffer <- st_buffer(point, 1600) #but when not plannar creates jagged edges
+
+smc_tracts <- tracts("CA", "San Mateo")
+
+mapview(smc_tracts) + mapview(buffer)
+
+subset_tracts <- smc_tracts %>%
+  st_transform(st_crs(buffer)) %>%
+  .[buffer,]
+
+mapview(subset_tracts)
+
+```
+
+```{r}
+subset_tracts_center <- smc_tracts %>%
+  st_centroid() %>%
+  st_transform(26910) %>%
+  .[buffer,]
+
+subset_tracts_intersect <- smc_tracts %>%
+  st_transform(26910) %>%
+  st_intersection(buffer,.) #when buffer intersection is first, it takes on character of first input, buffer, and uses the second thing to cut it. might want to do the other way around. 
+
+subset_tracts_intersect <- smc_tracts %>%
+  st_transform(26910) %>%
+  st_intersection(buffer) %>%
+  st_as_sf()
+
+mapview(subset_tracts_intersect)
+```
+
+```{r}
+polygon <- 
+  rbind(
+    c(-122.16642, 37.3839),
+    c(-122.2115, 37.4134),
+    c(-122.1901, 37.4314),
+    c(-122.15406, 37.4099),
+    c(-122.16642, 37.3839)
+  ) %>% 
+  list() %>% 
+  st_polygon() %>% 
+  st_sfc() %>% 
+  st_set_crs(4326)
+
+mapview(polygon)
+```
+
+```{r}
+library(readxl)
+
+temp <- tempfile()
+download.file("https://oehha.ca.gov/media/downloads/calenviroscreen/document/calenviroscreen40resultsdatadictionaryf2021.zip",destfile = temp)
+
+ces4 <- read_excel(
+  unzip(
+    temp, 
+    "calenviroscreen40resultsdatadictionary_F_2021.xlsx"
+  ), 
+  sheet = "CES4.0FINAL_results"
+)
+
+unlink(temp)
+
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+ca_tracts <- tracts("CA", cb = T, progress_bar = F)
+
+ces4_bay_pm25 <-
+  ces4 %>% 
+  filter(`California County` %in% bay_county_names) %>% 
+  select(`Census Tract`, PM2.5, `Total Population`) %>% 
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = as.numeric(GEOID)), 
+    by = c("Census Tract" = "GEOID")
+  ) %>% 
+  st_as_sf()
+
+mapview(ces4_bay_pm25, zcol = "PM2.5")
+```
+
+
+
+```{r}
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+smc_population <-
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "tract:*", 
+    regionin = "state:06+county:081",
+    vars = "B01001_001E"
+  ) %>% 
+  mutate(
+    tract = paste0(state, county, tract) %>% as.numeric()
+  )
+
+
+ces4_pop <- ces4_bay_pm25 %>% 
+  left_join(
+    smc_population %>% 
+      select(tract, pop = B01001_001E),
+    by = c("Census Tract" = "tract")
+  )
+#OR
+ces4_pop <- ces4_bay_pm25 %>% 
+  left_join(
+    smc_population %>% 
+      select(`Census Tract` = tract, pop = B01001_001E)
+  )
+
+mapview(ces4_pop, zcol = "pop")
+```
+
+```{r}
+ces4_pop <- ces4_bay_pm25 %>% 
+  right_join( #keep size and characteristics of right side - SMC object
+    smc_population %>% 
+      select(tract, pop = B01001_001E),
+    by = c("Census Tract" = "tract")
+  )
+
+mapview(ces4_pop) # See how the data set got cut down to SMC
+
+sum(ces4_pop$`Total Population` == ces4_pop$pop, na.rm = T)
+```
+
+```{r}
+smc_tracts <- ca_tracts %>% 
+  filter(COUNTYFP == "081")
+
+places <- places("CA")
+
+places_example <- places %>% 
+  filter(NAME %in% c("East Palo Alto", "Menlo Park"))
+
+mapview(places_example)
+
+smc_tracts_places_join <- smc_tracts %>% 
+  st_join(places_example) #makes copies of all the smc tracts that touch places_examples
+
+mapview(smc_tracts_places_join)
+
+smc_tracts_places_join %>%
+  filter(!is.na(NAME.y)) %>%
+  mapview() + mapview(places_example)
+#can create repeat data, since some tracts exist in both east pallo alto and menlo park
+
+join <- places_example %>%
+  st_join(smc_tracts)
+
+  mapview(join) # just making a bunch of copies of ones that intersect 
+  
+deduplicate <- join %>%
+  filter(!duplicated(NAME.x))
+
+mapview(deduplicate)
+```
+
