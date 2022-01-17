@@ -1,0 +1,751 @@
+---
+title: "AlessandroKerr_A1"
+author: "Alessandro Kerr"
+date: " January 18, 2022"
+output: html_document
+---
+
+The East Palo Alto Opportunity to Purchase Act (EPA OPA) aims to create affordable housing opportunities for residents and to avoid resident displacement within the city. This will be accomplished by giving tenants, non-profits, or jurisdictions the first opportunity to purchase residential property. Proponents of the EPA OPA believe that this instrument protects tenants from displacement by providing an opportunity for home-ownership. As a result, the Act secures housing and affordable rent for East Palo Alto residents, all-the-while promoting cultural stability. 
+
+Detractors, however, perceive this policy as an unfair penalty to homeowners who stand to bear increased costs arising from additional bureaucracy and regulations. Furthermore, they argue that they do not have adequate protection against Potential Eligible Purchasers who fail to act in good faith. This report will provide an objective examination of the proposed EPA OPA. Then, it will complete a “meta-analysis” of the debate, weighing opposing interests, benefits, and communication to determine whether the policy implementation is reasonable. 
+
+First, locating the non-burdened, burdened, and severely-burdened households gives a visual representation of troubled areas in EPA. The map below represents burdened renter households in EPA at the census block level. Selecting one of options in the left 'Layer Control' box will allow the isolation of one housing burden-level. 
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(tigris)
+library(censusapi)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(tidycensus)
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+Sys.setenv(CENSUS_KEY="0f0e2bffc9d96d5405bcb932e25318a4edb32602")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+```
+
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
+epa_renter_data <- getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "block group:*", 
+    regionin = "state:06+county:081+tract:612000,611800,611900,612100",
+    vars = "group(B25074)"
+  ) %>%
+  mutate(
+    cbg =
+      paste0(state,county,tract,block_group)
+  ) %>% 
+  select(!c(GEO_ID,state,county,tract,block_group,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  select(-variable) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"income","percent"),
+    sep = "!!"
+  ) %>% 
+  filter(estimate != 0) %>%
+  group_by(percent,cbg) %>%
+  summarize(estimate = sum(estimate))
+
+
+epa_renter_data$percent[epa_renter_data$percent=="Less than 20.0 percent"]<- "20.0 percent or less" 
+    
+epa_renter_data <- epa_renter_data[c(64:75,1:63,76:nrow(epa_renter_data)), ]
+
+epa_blocks <- block_groups("CA", "San Mateo", cb = T, progress_bar = F) %>%
+  filter(TRACTCE == 612000 | TRACTCE == 611800 | TRACTCE == 611900 | TRACTCE == 612100) 
+
+epa_renter_filtered <- epa_renter_data %>%
+  left_join(epa_blocks, by = c("cbg" = "GEOID")) %>%
+  select(cbg, estimate, percent, geometry) %>%
+  filter(!is.na(percent), percent != "Not computed") %>%
+  mutate(percent = case_when(
+    percent == "20.0 percent or less" ~ "NotBurdened",
+    percent == "20.0 to 24.9 percent" ~ "NotBurdened",
+    percent == "25.0 to 29.9 percent" ~ "NotBurdened",
+    percent == "30.0 to 34.9 percent" ~ "Burdened",
+    percent == "35.0 to 39.9 percent" ~ "Burdened",
+    percent == "40.0 to 49.9 percent" ~ "Burdened",
+    percent == "50.0 percent or more" ~ "SeverelyBurdened"
+  )) %>%
+  dplyr::rename(BurdenStatus = percent) %>%
+  group_by(cbg,BurdenStatus)  %>%
+  summarise(
+    estimate = sum(estimate)
+  ) %>%
+  pivot_wider(
+    names_from = 'BurdenStatus',
+    values_from = 'estimate'
+  )  %>%
+  left_join(epa_blocks, by = c("cbg" = "GEOID")) %>%
+  select(cbg, NotBurdened, Burdened, SeverelyBurdened, geometry) %>%
+   st_as_sf()
+
+```
+
+```{r}
+burden_pal1 <- colorNumeric(
+  palette = "RdYlBu",
+  domain = epa_renter_filtered$NotBurdened
+)
+
+burden_pal2 <- colorNumeric(
+  palette = "PuOr",
+  domain = epa_renter_filtered$Burdened
+)
+
+burden_pal3 <- colorNumeric(
+  palette = "PRGn",
+  domain = epa_renter_filtered$SeverelyBurdened
+)
+
+epa_renter_filtered %>% 
+  leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addPolygons(
+    fillColor = ~burden_pal1(NotBurdened),
+    fillOpacity = 0.5,
+    color = "white",
+    weight = 0.5,
+    label = ~paste0(NotBurdened, " No. of Unburdened Households"),
+    group = 'NotBurdened',
+    highlightOptions = highlightOptions(
+      weight = 2
+    )
+  ) %>% 
+  addPolygons(
+    fillColor = ~burden_pal2(Burdened),
+    fillOpacity = 0.5,
+    color = "white",
+    weight = 0.5,
+    label = ~paste0(Burdened, " No. of Burdened Households"),
+    group = 'Burdened',
+    highlightOptions = highlightOptions(
+      weight = 2
+    )
+  ) %>%
+  addPolygons(
+    fillColor = ~burden_pal3(SeverelyBurdened),
+    fillOpacity = 0.5,
+    color = "white",
+    weight = 0.5,
+    label = ~paste0(SeverelyBurdened , " No. of Severely burdened Households"),
+    group = 'SeverelyBurdened',
+    highlightOptions = highlightOptions(
+      weight = 2
+    ) 
+    ) %>%
+  addLegend(
+    pal = burden_pal1,
+    values = ~NotBurdened,
+    title = "Non-Burdened Renter Household Distribution in East Palo Alto"
+  ) %>%
+    addLegend(
+    pal = burden_pal2,
+    values = ~Burdened,
+    title = "Burdened Renter Household Distribution in East Palo Alto"
+  ) %>%
+    addLegend(
+    pal = burden_pal3,
+    values = ~SeverelyBurdened,
+    title = "Severely Burdened Renter Household Distribution in East Palo Alto"
+  ) %>%
+    addLayersControl(
+    overlayGroups = c('NotBurdened', 'Burdened', 'SeverelyBurdened'),
+    options = layersControlOptions(collapsed = FALSE),
+    position = 'topleft'
+    )
+
+```
+
+
+The map above has several takeaways for the residents of EPA. In general, the ordinance was developed to combat the rising house prices in EPA. The map visualizes this trend. It can be seen that many of the severely-burdened and burdened renter household areas are located near the Palo Alto (PA) border. This is logical because the more expensive rental prices in PA begin to encroach into EPA. However, it begs the question of whether PA residents should also be entitled to the cheaper housing options that are available in EPA, or in other words, whose interests are most at stake. This is a difficult question to answer. It appears that many of the residents who voiced their concerns at hearings were residents of EPA. However, creating uniform communication to the entire Bay Area regarding this ordinance would be impossible. It is therefore understandable that the majority of involved stakeholders would be from EPA. Nonetheless, understanding the geographical distribution of the burdened renter households in EPA is one basis for a better understanding of the EPA OPA. 
+
+The next map represents burdened owner-households. Unfortunately, this map had to be created at the census tract level, due to the unavailability of census block data. 
+
+
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
+epa_tracts <- tracts("CA", "San Mateo")
+
+epa_owner_data <- getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "tract:*", 
+    regionin = "state:06+county:081",
+    vars = "group(B25095)"
+  ) %>% 
+  filter(tract == 612000 | tract == 611800 | tract == 611900 | tract == 612100) %>%
+  select(!c(NAME,state,county) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate",
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  select(-variable) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"income","percent"),
+    sep = "!!"
+  ) %>% 
+  filter(estimate != 0) %>%
+  group_by(percent,tract) %>%
+  summarize(estimate = sum(estimate)) %>%
+  filter(percent != "Not computed", !is.na(percent))
+
+epa_owner_data$percent[epa_owner_data$percent=="Less than 20.0 percent"]<- "20.0 percent or less"
+
+epa_owner_filtered <- epa_owner_data %>%
+  left_join(epa_tracts, by = c("tract" = "TRACTCE")) %>%
+  select(tract, estimate, percent, geometry) %>%
+  filter(!is.na(percent), percent != "Not computed") %>%
+  mutate(percent = case_when(
+    percent == "20.0 percent or less" ~ "NotBurdened",
+    percent == "20.0 to 24.9 percent" ~ "NotBurdened",
+    percent == "25.0 to 29.9 percent" ~ "NotBurdened",
+    percent == "30.0 to 34.9 percent" ~ "Burdened",
+    percent == "35.0 to 39.9 percent" ~ "Burdened",
+    percent == "40.0 to 49.9 percent" ~ "Burdened",
+    percent == "50.0 percent or more" ~ "SeverelyBurdened"
+  )) %>%
+  dplyr::rename(BurdenStatus = percent) %>%
+  group_by(tract,BurdenStatus)  %>%
+  summarise(
+    estimate = sum(estimate)
+  ) %>%
+  pivot_wider(
+    names_from = 'BurdenStatus',
+    values_from = 'estimate'
+  )  %>%
+  left_join(epa_tracts, by = c("tract" = "TRACTCE")) %>%
+  select(tract, NotBurdened, Burdened, SeverelyBurdened, geometry) %>%
+   st_as_sf()
+
+
+```
+
+
+
+```{r}
+burden_pal4 <- colorNumeric(
+  palette = "RdYlBu",
+  domain = epa_owner_filtered$NotBurdened
+)
+
+burden_pal5 <- colorNumeric(
+  palette = "PuOr",
+  domain = epa_owner_filtered$Burdened
+)
+
+burden_pal6 <- colorNumeric(
+  palette = "PRGn",
+  domain = epa_owner_filtered$SeverelyBurdened
+)
+
+epa_owner_filtered %>% 
+  leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addPolygons(
+    fillColor = ~burden_pal4(NotBurdened),
+    fillOpacity = 0.5,
+    color = "white",
+    weight = 0.5,
+    label = ~paste0(NotBurdened, " No. of Unburdened Households"),
+    group = 'NotBurdened',
+    highlightOptions = highlightOptions(
+      weight = 2
+    )
+  ) %>% 
+  addPolygons(
+    fillColor = ~burden_pal5(Burdened),
+    fillOpacity = 0.5,
+    color = "white",
+    weight = 0.5,
+    label = ~paste0(Burdened, " No. of Burdened Households"),
+    group = 'Burdened',
+    highlightOptions = highlightOptions(
+      weight = 2
+    )
+  ) %>%
+  addPolygons(
+    fillColor = ~burden_pal6(SeverelyBurdened),
+    fillOpacity = 0.5,
+    color = "white",
+    weight = 0.5,
+    label = ~paste0(SeverelyBurdened , " No. of Severely burdened Households"),
+    group = 'SeverelyBurdened',
+    highlightOptions = highlightOptions(
+      weight = 2
+    ) 
+    ) %>%
+  addLegend(
+    pal = burden_pal4,
+    values = ~NotBurdened,
+    title = "Non-Burdened Owner Household Distribution in East Palo Alto"
+  ) %>%
+    addLegend(
+    pal = burden_pal5,
+    values = ~Burdened,
+    title = "Burdened Owner Household Distribution in East Palo Alto"
+  ) %>%
+    addLegend(
+    pal = burden_pal6,
+    values = ~SeverelyBurdened,
+    title = "Severely Burdened Owner Household Distribution in East Palo Alto"
+  ) %>%
+    addLayersControl(
+    overlayGroups = c('NotBurdened', 'Burdened', 'SeverelyBurdened'),
+    options = layersControlOptions(collapsed = FALSE),
+    position = 'topleft'
+    )
+```
+
+
+It can be seen that the highest concentration of burdened owner households is located in the heart of EPA. This could be representative of longer-term EPA residents (rather than those leaking in from PA). The discrepancy in the location of burdened renter- and burdened owner-households provides a basis for further analysis. It would be interesting to analyze more granular information, to see exactly how each block group differs in terms of owners and renters. 
+
+More generally, EPA can be analyzed for the type of burden and housing tenure. First, the amount of non-burdened, burdened, and severely-burdened households were mapped across both owned- and rented-households. Below is the distribution of renter-households:
+
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
+epa_renter_data_1 <- getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "place:*", 
+    regionin = "state:06",
+    vars = "group(B25074)"
+  )
+
+epa_place <- places("CA") %>%
+  filter(PLACEFP == 20956)
+
+epa_renter_data_place <- epa_renter_data_1 %>%
+  filter(place == 20956) %>% 
+  select(!c(GEO_ID,state,place,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  select(-variable) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"income","percent"),
+    sep = "!!"
+  )  %>% 
+  filter(estimate != 0, !is.na(income), !is.na(percent), percent != "Not computed") %>%
+  mutate(percent = case_when(
+    percent == "Less than 20.0 percent" ~ "NotBurdened",
+    percent == "20.0 to 24.9 percent" ~ "NotBurdened",
+    percent == "25.0 to 29.9 percent" ~ "NotBurdened",
+    percent == "30.0 to 34.9 percent" ~ "Burdened",
+    percent == "35.0 to 39.9 percent" ~ "Burdened",
+    percent == "40.0 to 49.9 percent" ~ "Burdened",
+    percent == "50.0 percent or more" ~ "SeverelyBurdened"
+  )) %>%
+  dplyr::rename(BurdenStatus = percent) %>%
+  group_by(BurdenStatus)  %>%
+  summarise(
+    estimate = sum(estimate)
+  ) %>%
+  pivot_wider(
+    names_from = 'BurdenStatus',
+    values_from = 'estimate'
+  ) %>%
+  mutate(Total = Burdened + SeverelyBurdened + NotBurdened, GEOID = "0620956") %>%
+  left_join(epa_place) %>%
+  select(Burdened,SeverelyBurdened, NotBurdened,Total,geometry) %>%
+  st_as_sf() %>%
+  mutate(perc_not_burdened = NotBurdened/Total*100, perc_burdened = Burdened/Total*100, perc_severely_burdened = SeverelyBurdened/Total*100) 
+
+epa_renter_data_place$perc_not_burdened <- round(epa_renter_data_place$perc_not_burdened, digits = 2)
+epa_renter_data_place$perc_burdened <- round(epa_renter_data_place$perc_burdened, digits = 2)
+epa_renter_data_place$perc_severely_burdened <- round(epa_renter_data_place$perc_severely_burdened, digits = 2)
+
+```
+
+```{r}
+leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = epa_renter_data_place,
+    fillColor = "yellow",
+    fillOpacity = 0.5,
+    weight = 0.5,
+    label = ~paste0(NotBurdened, " No. of Unburdened Renter Households = ", perc_not_burdened, "%; ",
+                    Burdened, " No. of Burdened Renter Households = ", perc_burdened, "%; ",
+                    SeverelyBurdened, " No. of Severely Burdened Renter Households = ", perc_severely_burdened, "%"),
+    highlightOptions = highlightOptions(
+      weight = 2
+    ))
+```
+
+```{r}
+paste0(epa_renter_data_place$NotBurdened, " No. of Unburdened Renter Households = ", epa_renter_data_place$perc_not_burdened, "%; ")
+
+paste0(epa_renter_data_place$Burdened, " No. of Burdened Renter Households = ", epa_renter_data_place$perc_burdened, "%; ")
+
+paste0(epa_renter_data_place$SeverelyBurdened, " No. of Severely Burdened Renter Households = ", epa_renter_data_place$perc_severely_burdened, "%; ")
+```
+
+
+
+Below is the distribution of owner-households:
+
+
+```{r}
+epa_owner_data_1 <- getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "place:*", 
+    regionin = "state:06",
+    vars = "group(B25095)"
+  )
+
+epa_owner_data_place <- epa_owner_data_1 %>%
+  filter(place == 20956) %>% 
+  select(!c(GEO_ID,state,place,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  select(-variable) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"income","percent"),
+    sep = "!!"
+  )  %>% 
+  filter(estimate != 0, !is.na(income), !is.na(percent), percent != "Not computed") %>%
+  mutate(percent = case_when(
+    percent == "Less than 20.0 percent" ~ "NotBurdened",
+    percent == "20.0 to 24.9 percent" ~ "NotBurdened",
+    percent == "25.0 to 29.9 percent" ~ "NotBurdened",
+    percent == "30.0 to 34.9 percent" ~ "Burdened",
+    percent == "35.0 to 39.9 percent" ~ "Burdened",
+    percent == "40.0 to 49.9 percent" ~ "Burdened",
+    percent == "50.0 percent or more" ~ "SeverelyBurdened"
+  )) %>%
+  dplyr::rename(BurdenStatus = percent) %>%
+  group_by(BurdenStatus)  %>%
+  summarise(
+    estimate = sum(estimate)
+  ) %>%
+  pivot_wider(
+    names_from = 'BurdenStatus',
+    values_from = 'estimate'
+  ) %>%
+  mutate(Total = Burdened + SeverelyBurdened + NotBurdened, GEOID = "0620956") %>%
+  left_join(epa_place) %>%
+  select(Burdened,SeverelyBurdened,NotBurdened,Total,geometry) %>%
+  st_as_sf() %>%
+  mutate(perc_not_burdened = NotBurdened/Total*100, perc_burdened = Burdened/Total*100, perc_severely_burdened = SeverelyBurdened/Total*100)
+
+epa_owner_data_place$perc_not_burdened <- round(epa_owner_data_place$perc_not_burdened, digits = 2)
+epa_owner_data_place$perc_burdened <- round(epa_owner_data_place$perc_burdened, digits = 2)
+epa_owner_data_place$perc_severely_burdened <- round(epa_owner_data_place$perc_severely_burdened, digits = 2)
+
+leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = epa_owner_data_place,
+    fillOpacity = 0.5,
+    weight = 0.5,
+    label = ~paste0(NotBurdened, " No. of Unburdened Homeowner Households = ", perc_not_burdened, "%; ",
+                    Burdened, " No. of Burdened Homeowner Households = ", perc_burdened, "%; ",
+                    SeverelyBurdened, " No. of Severely Burdened Homeowner Households = ", perc_severely_burdened, "%" ),
+    highlightOptions = highlightOptions(
+      weight = 2
+    ))
+
+
+```
+
+```{r}
+paste0(epa_owner_data_place$NotBurdened, " No. of Unburdened Owner Households = ", epa_owner_data_place$perc_not_burdened, "%; ")
+
+paste0(epa_owner_data_place$Burdened, " No. of Burdened Owner Households = ", epa_owner_data_place$perc_burdened, "%; ")
+
+paste0(epa_owner_data_place$SeverelyBurdened, " No. of Severely Burdened Owner Households = ", epa_owner_data_place$perc_severely_burdened, "%; ")
+```
+
+
+ Below is more information regarding renter-occupied units:
+
+
+```{r}
+#OVERALL PERCENT OF RENTER OCCUPIED UNITS
+
+paste0("Overall Percentage of Renter Occupied Units: ", round(epa_renter_data_place$Total/(epa_renter_data_place$Total+epa_owner_data_place$Total)*100, digits = 2), "%")
+
+#PERCENTAGE OF SEVERELY BURDENED ARE RENTERS
+
+paste0("Overall Percentage of Severely Burdened Households that are Renter-Occupied Households: ", round(epa_renter_data_place$SeverelyBurdened/(epa_renter_data_place$SeverelyBurdened+epa_owner_data_place$SeverelyBurdened)*100, digits = 2), "%")
+
+
+```
+
+
+As seen above, not only are the majority of units in EPA rented, but they make up an even greater proportion of the severely burdened households. This piece of information could be useful in motivating opposition to the ordinance. To better visualize this, a map was created that breaks down the parcels in EPA in terms of housing tenure:
+
+
+```{r}
+# PART 2
+smtaxdata <- readRDS("smtaxdata.RDS")
+
+```
+
+```{r}
+smtaxfilter<- smtaxdata %>%
+  separate(
+    `Situs Address`, 
+    into= c("Address", "City"),
+    sep=","
+  ) %>%
+  filter(
+    City == " EAST PALO ALTO"
+  ) 
+
+smtaxepa<-smtaxfilter %>%
+  filter(
+    Exemption == 0 | Exemption == 5600 | Exemption == 7000
+  ) %>%
+  mutate(
+    Tenure = if_else(
+      Exemption == 0, 'Renter', 'Owner'
+    )
+  ) %>%
+  dplyr::rename(
+    APN = `Parcel Number`
+  ) %>%
+  dplyr::mutate_at(
+    vars(APN), list(~as.numeric(str_replace_all(.,"-","")
+        ))) %>%
+  filter(
+    `Fiscal Year` == "2018/2019"
+  )
+  
+smtaxepa$APN=paste0(0,smtaxepa$APN)
+
+
+```
+
+```{r}
+library(remotes)
+install_github("yonghah/esri2sf")
+library(esri2sf)
+
+epa_zoning <- esri2sf("https://services8.arcgis.com/0IC8hha3hgQkmGoa/arcgis/rest/services/EastPaloAltoZoning_2021_WFL1/FeatureServer/1") 
+
+epazonemap <- epa_zoning %>%
+  left_join(
+  smtaxepa
+  )
+
+
+leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = epazonemap,
+    fill = F
+  ) %>% 
+  addPolygons(
+    data = epa_place,
+    fillOpacity = 0,
+    label = "East Palo Alto Boundary"
+  ) %>% 
+  addPolygons(
+    data = epazonemap,
+    fillColor = ~ifelse(Tenure == "Renter", "red", "blue"),
+    color = ~ifelse(Tenure == "Renter", "red", "blue"),
+    weight = 1,
+    label = epazonemap$Tenure
+  ) 
+
+```
+
+
+It is interesting to note the distribution of renter- and owner-households in EPA. It is a fairly uniform distribution, with very few areas that are skewed towards either housing tenure. With the most recent change to the ordinance excluding single family homes, it is useful to see who this exclusion would benefit and what remaining proportion are renters and owners. See the map of single family homes in EPA below sorted by housing tenure:
+
+
+
+```{r}
+#SINGLE FAMILY FILTER
+epa_singlefam <- epazonemap %>%
+  filter(New_Zone == "R-LD")
+
+leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = epa_singlefam,
+    fill = F
+  ) %>% 
+  addPolygons(
+    data = epa_place,
+    fillOpacity = 0,
+    label = "East Palo Alto Boundary"
+  ) %>%
+  addPolygons(
+    data = epa_singlefam,
+    fillColor = ~ifelse(Tenure == "Renter", "red", "blue"),
+    color = ~ifelse(Tenure == "Renter", "red", "blue"),
+    weight = 0.5,
+    label = epa_singlefam$Tenure
+  ) 
+  
+```
+
+
+Especially when filtered to single family homes, it is clear how evenly distributed the housing tenure is in EPA. This suggests the widespread nature of the housing burden issue in EPA and the possibility to affect all neighborhoods.
+
+In the years leading up to the ordinance, it is useful to see how the tenure trends have changed. This may suggest the need for the ordinance to prevent these trends from worsening.
+
+
+
+```{r}
+#CHANGE IN RENTER & OWNER PROPORTION IN EPA
+sm_change <- smtaxfilter %>%
+  filter(
+    Exemption == 0 | Exemption == 5600 | Exemption == 7000
+  ) %>%
+  mutate(
+    Tenure = if_else(
+      Exemption == 0, 'Renter', 'Owner'
+    )
+  ) %>%
+  select(Tenure,`Fiscal Year`) %>%
+  group_by(Tenure, `Fiscal Year`) 
+
+population_change <- sm_change%>%
+  count(Tenure)%>%
+  rename("estimate" = "n")
+
+population_change %>%
+    ggplot()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+    geom_line(
+    aes(
+      x = `Fiscal Year`,
+      y = estimate,
+      colour = Tenure, 
+      group = Tenure
+    ))+
+    labs(
+    x = "Fiscal Year",
+    y = "No. of Households",
+    title = "Distribution by Tenure between 2015 to 2019 in East Palo Alto",
+  ) 
+```
+
+
+Given the clear increase in renters, and decrease in owners in recent years, a troubling trend is forming in EPA. The above graph is particularly interesting because it suggests that homeowners/landlords must own more than one house in EPA. This is what the ordinance targets, those who are external landlords and seek to benefit from renters continuing to pay increasing rent without ever being able to afford to enter the real-estate market. Once again, this begs the question of whether current renters could even afford to own homes, even at subsidized prices. The following chart shows household burden percentages across different income brackets based on housing tenure. Ideally, this would have used actual income and cost data, but it was difficult to aggregate tax, PUMS, and ACS data at the parcel level to achieve the targeted map. 
+
+
+
+```{r}
+#MORTGAGE ANALYSIS
+epa_mortgage <- getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "place:*", 
+    regionin = "state:06",
+    vars = "group(B25106)"
+  ) %>%
+  filter(place == 20956) %>% 
+  select(!c(GEO_ID,state,place,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  select(-variable) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"tenure","income", "percent"),
+    sep = "!!"
+  )  %>% 
+  filter(!is.na(income), !is.na(percent), !is.na(tenure)) %>%
+  mutate(percent = case_when(
+    percent == "Less than 20 percent" ~ 20,
+    percent == "20 to 29 percent" ~ 25,
+    percent == "30 percent or more" ~ 30,
+  )) %>%
+  group_by(tenure,income) %>%
+  mutate(
+    total = sum(estimate)
+  ) %>%
+  filter(percent==30)%>%
+  mutate(
+    perc_burden=estimate/total
+  ) %>%
+  select(
+    tenure,income,perc_burden
+  ) %>%
+ mutate(income=case_when(
+  income =="Less than $20,000:" ~"$20,000 or less",
+  income =="$20,000 to $34,999:" ~"$20,000 to $34,999",
+  income == "$35,000 to $49,999:"~"$35,000 to $49,999:",
+  income == "$50,000 to $74,999:"~"$50,000 to $74,999:",
+  income == "$75,000 or more:"~"$75,000 or more:"
+  )
+  )
+
+
+  epa_mortgage %>%
+    ggplot()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+    geom_line(
+    aes(
+      x = income,
+      y = perc_burden,
+      colour = tenure, 
+      group = tenure
+    ))+
+    labs(
+    x = "Household Income Group",
+    y = "Proportion of Burdened households",
+    title = "Household Burden Proportion in East Palo Alto",
+  ) 
+  
+```
+
+Ultimately, this graph suggests that the ordinance may be poised to help renter-burdened households enter the real estate market. One notices that renters within the same income brackets have a higher proportion of being housing burdened. While subsidies may also be necessary to get people out of the rental market, it is clear that people who own houses are less burdened, especially at lower incomes, which ultimately supporting this ordinance. This is logical because landlords must charge renters more than their mortgage payment in order to make a profit. However, rather than assuming whether renters would become owners if they were given the first opportunity to purchase a home, a survey could be very useful here. A survey would provide first-hand feedback from EPA residents and it could be analyzed to clearly convey stakeholders' interests. Other considerations, like whether current renters could afford a down-payment, upkeep costs, etc., may be resolved on a case-by-case basis through a survey. In my opinion, the first step of the ordinance should have been surveying relevant stakeholders and gauging interest. 
+
+In all, the OPA EPA is an interesting ordinance which has potential to help renters in EPA based on the above analysis. However, I think community outreach, including research into relevant stakeholders, educational sessions, and presenting clear facts is necessary to resolve the concerns EPA residents have with the issue. I am curious to see how this issue progresses in the coming months. 

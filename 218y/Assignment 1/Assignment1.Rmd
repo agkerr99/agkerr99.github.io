@@ -86,7 +86,7 @@ epa_owner_data <- getCensus(
     name = "acs/acs5",
     vintage = 2019,
     region = "block group:*", 
-    regionin = "state:06+county:081+tract:612000,611800,611900,612100",
+    regionin = "state:06+county:006",
     vars = "group(B25095)"
   ) 
 
