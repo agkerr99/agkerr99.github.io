@@ -576,69 +576,82 @@ library(remotes)
 install_github("yonghah/esri2sf")
 library(esri2sf)
 
-epa_zoning <- esri2sf("https://services8.arcgis.com/0IC8hha3hgQkmGoa/arcgis/rest/services/EastPaloAltoZoning_2021_WFL1/FeatureServer/1") 
+epa_zoning <- esri2sf("https://services8.arcgis.com/0IC8hha3hgQkmGoa/arcgis/rest/services/EastPaloAltoZoning_2021_WFL1/FeatureServer/1")
 
-epazonemap <- epa_zoning %>%
-  left_join(
-  smtaxepa
-  )
+smc_exemption <- readRDS("smtaxdata.RDS")
 
 
-leaflet() %>% 
-  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
-  addPolygons(
-    data = epazonemap,
-    fill = F
+epa_exemption <- smc_exemption %>% 
+  mutate(
+    APN = `Parcel Number` %>% 
+      str_replace_all("-","")
   ) %>% 
+  filter(APN %in% epa_zoning$APN) %>% 
+  left_join(epa_zoning) %>% 
+  st_as_sf() 
+
+leaflet() %>%
+  addProviderTiles(provider = providers$CartoDB.Positron) %>%
   addPolygons(
-    data = epa_place,
-    fill = F,
-    label = "East Palo Alto Boundary",
+    data = epa_exemption %>%
+    filter(`Fiscal Year` == "2018/2019"),
+    fillColor = "Yellow",
+    color = "black",
     weight = 0.5
-  ) %>% 
+  ) %>%
   addPolygons(
-    data = epazonemap,
-    fillColor = ~ifelse(Tenure == "Renter", "red", "blue"),
-    color = ~ifelse(Tenure == "Renter", "red", "blue"),
-    weight = 0,
-    label = epazonemap$Tenure
+    data = epa_exemption %>%
+    filter(`Fiscal Year` == "2018/2019") %>%
+    filter(Exemption %in% c(5600,7000)),
+    fillColor = "blue",
+    color = "black",
+    weight = 0.5,
+    fillOpacity = 1
   ) 
+
 
 ```
 
 
-It is interesting to note the distribution of rented- and owned-parcels in EPA. It is a fairly uniform distribution, with very few areas that are skewed towards either housing tenure. With the most recent change to the ordinance excluding single family homes, it is useful to see who this exclusion would benefit and what remaining proportion are renters and owners. See the map of single family homes in EPA below sorted by housing tenure:
+In the above plot, the blue houses represent owned-households. It is interesting to note the distribution of rented- and owned-parcels in EPA. It is a fairly uniform distribution, with very few areas that are skewed towards either housing tenure. With the most recent change to the ordinance excluding single family homes, it is useful to see who this exclusion would benefit and what remaining proportion are renters and owners. See the map of single family homes in EPA below sorted by housing tenure:
 
 
 
 ```{r}
 #SINGLE FAMILY FILTER
-epa_singlefam <- epazonemap %>%
+epa_exemption2 <- smc_exemption %>% 
+  mutate(
+    APN = `Parcel Number` %>% 
+      str_replace_all("-","")
+  ) %>% 
+  filter(APN %in% epa_zoning$APN) %>% 
+  left_join(epa_zoning) %>% 
+  st_as_sf() %>% 
   filter(New_Zone == "R-LD")
 
-leaflet() %>% 
-  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+leaflet() %>%
+  addProviderTiles(provider = providers$CartoDB.Positron) %>%
   addPolygons(
-    data = epa_singlefam,
-    fill = F
-  ) %>% 
-  addPolygons(
-    data = epa_place,
-    fillOpacity = 0,
-    label = "East Palo Alto Boundary"
+    data = epa_exemption2 %>%
+    filter(`Fiscal Year` == "2018/2019"),
+    fillColor = "Yellow",
+    color = "black",
+    weight = 0.5
   ) %>%
   addPolygons(
-    data = epa_singlefam,
-    fillColor = ~ifelse(Tenure == "Renter", "red", "blue"),
-    color = ~ifelse(Tenure == "Renter", "red", "blue"),
-    weight = 0,
-    label = epa_singlefam$Tenure
+    data = epa_exemption2 %>%
+    filter(`Fiscal Year` == "2018/2019") %>%
+    filter(Exemption %in% c(5600,7000)),
+    fillColor = "blue",
+    color = "black",
+    weight = 0.5,
+    fillOpacity = 1
   ) 
   
 ```
 
 
-Especially when filtered to single family homes, it is clear how evenly distributed the housing tenure is in EPA. This suggests the widespread nature of the housing burden issue in EPA and the possibility to affect all neighborhoods.
+Especially when filtered to single family homes, it is clear how evenly distributed the housing tenure is in EPA. This suggests the widespread nature of the housing burden issue in EPA and the possibility to affect all neighborhoods. Once again, blue parcels are owned and yellow parcels are rented.
 
 In the years leading up to the ordinance, it is useful to see how the tenure trends have changed. This may suggest the need for the ordinance to prevent these trends from worsening.
 
