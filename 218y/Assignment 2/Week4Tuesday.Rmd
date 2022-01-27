@@ -1,0 +1,138 @@
+```{r}
+library(tidyverse)
+library(sf)
+library(tigris)
+library(censusapi)
+library(mapview)
+library(leaflet)
+library(mapboxapi)
+```
+
+Load from shared drive
+
+```{r}
+path <- "/Volumes/GoogleDrive/Shared drives/SFBI/Data Library/NHTS/nhts17-caltrans-tsdc-download/"
+
+pois <- st_read("/Volumes/GoogleDrive/Shared drives/SFBI/Data Library/OSM/gis_osm_pois_a_free_1.shp")
+```
+
+```{r}
+pois_summary <- pois %>% 
+  st_drop_geometry() %>% 
+  group_by(fclass) %>% 
+  count() %>% 
+  arrange(desc(n))
+
+pois_summary
+```
+
+```{r}
+smc_boundary <- counties("CA") %>% 
+  filter(NAME == "San Mateo") %>% 
+  st_transform(st_crs(pois))
+
+# will take longer but handles larger POIs better
+smc_pois <- pois %>% 
+  .[smc_boundary,] %>% 
+  rename(amenity = fclass)
+
+# faster
+smc_pois <- pois %>% 
+  st_centroid() %>% 
+  .[smc_boundary,] %>% 
+  rename(amenity = fclass)
+```
+
+```{r}
+mapview(smc_pois, zcol = "amenity")
+```
+
+```{r}
+pois_filter <- pois %>% 
+  rename(amenity = fclass) %>% 
+  filter(amenity %in% c(
+    "park",
+    "convenience",
+    "restaurant",
+    "supermarket",
+    "library"
+  ))
+
+mapview(pois_filter, zcol = "amenity")
+```
+```{r}
+saveRDS(pois_filter, "pois_filter.rds")
+pois_filter <- readRDS("pois_filter.rds")
+```
+
+```{r}
+smc_cbgs <- block_groups("CA","San Mateo")
+```
+
+```{r}
+nfo_boundary <- places("CA") %>% 
+  filter(NAME == "North Fair Oaks")
+
+nfo_cbgs <- smc_cbgs %>% 
+  st_centroid() %>% 
+  .[nfo_boundary, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(smc_cbgs %>% select(GEOID)) %>% 
+  st_as_sf()
+
+mapview(nfo_cbgs)
+```
+```{r}
+saveRDS(nfo_cbgs, "nfo_cbgs.rds")
+nfo_cbgs <- readRDS("nfo_cbgs.rds")
+```
+
+```{r}
+isochrones <- c("walking","driving") %>% 
+  map_dfr(function(x){
+    
+    mb_isochrone(
+      nfo_cbgs,
+      profile = x,
+      time = c(5,10,15)
+    ) %>% 
+      mutate(mode = x)
+    
+  })
+```
+```{r}
+saveRDS(isochrones, "nfo_isochrones.rds")
+isochrones <- readRDS("nfo_isochrones.rds")
+```
+
+```{r}
+access_raw <- isochrones %>% 
+  st_make_valid() %>%
+  st_join(pois_filter) %>% 
+  filter(!is.na(osm_id)) %>% 
+  st_drop_geometry()
+``` 
+
+```{r}
+amenity_preference <- data.frame(
+  amenity = c("park","convenience","restaurant","supermarket","library"),
+  amenity_value = c(
+    0.8,
+    0.6,
+    0.25,
+    1,
+    0.7
+  ),
+  amenity_quantity = c(
+    2,
+    5,
+    30,
+    1,
+    1
+  )
+) %>% 
+  mutate(
+    amenity_decay = -log(0.5)/amenity_quantity
+  )
+```
+
