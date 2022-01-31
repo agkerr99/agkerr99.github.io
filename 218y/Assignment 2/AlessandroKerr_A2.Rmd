@@ -5,6 +5,11 @@ date: " February 1, 2022"
 output: html_document
 ---
 
+
+# Complete Communities Analysis
+
+The purpose of this study is to design a "complete communities" methodology and apply it to a sub-geography. A complete community ranking weights selected amenities, their relative value, and their distances from an origin point across several types of transportation. Ultimately, a score for each sub-geography is determined. The process for selecting these characteristics and their application will be discussed in more detail below. 
+
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(readxl)
@@ -15,84 +20,142 @@ library(leaflet)
 library(htmltools)
 library(tidycensus)
 library(mapview)
+library(dplyr)
+library(ggrepel)
+library(ggplot2)
 
 knitr::opts_chunk$set(echo = F)
 knitr::opts_chunk$set(warning = F, message = F)
 
 ```
 
-```{r}
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
 path <- "/Volumes/GoogleDrive/Shared drives/SFBI/Data Library/NHTS/nhts17-caltrans-tsdc-download/"
 
 pois <- st_read("/Volumes/GoogleDrive/Shared drives/SFBI/Data Library/OSM/gis_osm_pois_a_free_1.shp")
 
-library(tidyverse)
-library(readxl)
-library(tigris)
-library(sf)
-library(leaflet)
 ```
 
 ```{r}
-pois_summary <- pois %>% 
-  st_drop_geometry() %>% 
-  group_by(fclass) %>% 
-  count() %>% 
-  arrange(desc(n))
-
-smc_boundary <- counties("CA") %>% 
-  filter(NAME == "San Mateo") %>% 
-  st_transform(st_crs(pois))
-
-smc_pois <- pois %>% 
-  .[smc_boundary, ] %>% 
-  rename(amenity = fclass)
-
-mapview(smc_pois, zcol = "amenity")
-
-#Let's not use all POIs lets filter down to differentiate
-
-smc_pois_filter <- smc_pois %>% 
-  filter(amenity %in% c(
-    "park",
-    "supermarket",
-    "pharmacy",
-    "bank",
-    "school",
-    "doctors",
-    "restaurant"
-  ))
-
-smc_pois_filter2 <- smc_pois %>% 
-  filter(amenity %in% c(
-    "hospital"))
-
-mapview(smc_pois_filter, zcol = "amenity")
-mapview(smc_pois_filter2, zcol = "amenity")
+# pois_summary <- pois %>% 
+#   st_drop_geometry() %>% 
+#   group_by(fclass) %>% 
+#   count() %>% 
+#   arrange(desc(n))
+# 
+# bay_county_names <-
+#   c(
+#     "Alameda",
+#     "Contra Costa",
+#     "Marin",
+#     "Napa",
+#     "San Francisco",
+#     "San Mateo",
+#     "Santa Clara",
+#     "Solano",
+#     "Sonoma"
+#   )
+# 
+# bay_counties <-
+#   counties("CA", cb = T, progress_bar = F) %>%
+#   filter(NAME %in% bay_county_names) %>%
+#   st_transform(st_crs(pois))
+# 
+# bay_pois <- pois %>% 
+#   .[bay_counties, ] %>% 
+#   rename(amenity = fclass)
+# 
+# mapview(bay_pois, zcol = "amenity")
+# 
+# #Let's not use all POIs lets filter down to differentiate
+# 
+# bay_pois_filter <- bay_pois %>% 
+#   filter(amenity %in% c(
+#     "park",
+#     "supermarket",
+#     "pharmacy",
+#     "bank",
+#     "school",
+#     "doctors",
+#     "restaurant",
+#     "bar",
+#     "pub",
+#     "pitch",
+#     "playground",
+#     "hospital",
+#     "theatre"
+#   ))
+# saveRDS(bay_pois_filter, "bay_pois_filter.RDS")
 ```
 
 ```{r}
-smc_cbs <- blocks("CA","San Mateo")
+# bay_pois_filter2 <- bay_pois %>% 
+#   filter(amenity %in% c(
+#     "hospital"))
+# 
+# saveRDS(bay_pois_filter2, "bay_pois_filter2.RDS")
+```
 
-rdw_boundary <- places("CA") %>% 
-  filter(NAME == "Redwood City")
+```{r}
+# smc_cbs <- blocks("CA","San Mateo")
+# 
+# rdw_boundary <- places("CA") %>% 
+#   filter(NAME == "Redwood City")
+# 
+# rdw_cbs <- smc_cbs %>% 
+#   st_centroid() %>% 
+#   .[rdw_boundary, ] %>% 
+#   st_drop_geometry() %>% 
+#   left_join(smc_cbs %>% select(GEOID10)) %>% 
+#   st_as_sf()
+# 
+# saveRDS(rdw_cbs, "rdw_cbs.RDS")
+```
 
-rdw_cbs <- smc_cbs %>% 
-  st_centroid() %>% 
-  .[rdw_boundary, ] %>% 
-  st_drop_geometry() %>% 
-  left_join(smc_cbs %>% select(GEOID10)) %>% 
-  st_as_sf()
+The first step in designing the complete communities methodology is determining the geographical region and granularity. In this case, Redwood City was chosen as the sub-geography of interest, broken down at the census block level. This was done to avoid the large distortions that can occur in the isochrones if census block groups are chosen. The census blocks were imported and filtered down to Redwood City, with the final file being saved in an RDS format to avoid redundancies and re-runs. This was the first modification to the suggested methodology outlined.
 
+From here, the points-of-interest (POIs) were imported from OpenStreetMap (OSM). Due to the large number of possible OSM POIs for the Bay Area, select variables were chosen for the complete communities analysis. The selection was based on a survey completed in the Kansas City Area, where respondents outlined amenities they "would like to see more of" in their communities (Quality of Life, 2019). POIs corresponding to each of the response groups were taken, and cross-referenced with the available data for the Bay Area POIs. The exact survey responses can be seen in the references, but respondents mainly stated amenities such as parks, recreational facilities, trails, restaurants, theaters, learning spaces, and restaurants. In addition, the calculation criteria for "Walk Score" was consulted, which is similar to a complete community score but solely for walking. Walk Score amenities like grocery stores, schools, parks, restaurants, and retail were included in this completeness score (Walk Score, 2022). 
+
+The selected variables from the OSM POIs were parks, supermarkets, banks, pharmacies, schools, doctors offices, restaurants, pubs, bars, pitches, playgrounds, hospitals, and theaters. This is a more well-rounded group of variables and represents the second deviation from the suggested methodology, as only 5 variables were chosen in the suggested analysis. The POI's were imported and filtered once, then the files were saved in an RDS format to avoid redundancies and re-runs. 
+
+To supplement the primary analysis, the complete communities analysis was repeated for critical amenity -- that being, hospitals. This represents the third modification from the suggested analysis and will be based on "minimum access". Similar to the above methodology, hospital POIs were imported and filtered to the Bay Area. Once again, the files were saved in an RDS format to avoid redundancies and re-runs. The results for the critical amenity analysis will come after the complete communites analysis.
+
+A map of the selected complete community POIs can be seen below.  
+
+
+```{r}
+bay_pois_filter <- readRDS("bay_pois_filter.RDS")
+bay_pois_filter2 <- readRDS("bay_pois_filter2.RDS")
+
+mapview(bay_pois_filter, zcol = "amenity")
+
+```
+
+
+A map of the the hospital POIs can be seen below.  
+
+
+```{r}
+mapview(bay_pois_filter2, zcol = "amenity")
+```
+
+
+A map of the Redwood City census blocks can be seen below.  
+
+
+```{r}
+rdw_cbs <- readRDS("rdw_cbs.RDS")
 mapview(rdw_cbs)
 ```
 
-```{r}
+From here, the isochrones for driving, walking, and cycling were calculated using 5, 10, and 15 minute time buffers. Isochrones essentially determine the boundary one could reach using the given transportation mode and specified time. The code was completed separately for each isochrone so the mapbox "token" use could be divided across group members. To avoid re-runs, the isochrones were all saved in an RDS format. 
+
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
 devtools::install_github("walkerke/mapboxapi")
 
 library(mapboxapi)
 
-mb_access_token("sk.eyJ1IjoiYWdrZXJyIiwiYSI6ImNreXEzMW93bTBnMmQyd20xdXdjeW5nZmEifQ.Hcj82xbvMUzLiJXjupdFQw", install = T, overwrite = T)
+mb_access_token("sk.eyJ1IjoiYWxleG5nbGQiLCJhIjoiY2t5dnY3OGliMDJlaTMwcnIxeHd5bTJucyJ9.mZzy6K59_f5dGUlEQ8oL7Q", install = T, overwrite = T)
 ```
 
 ```{r}
@@ -100,30 +163,462 @@ mb_access_token("sk.eyJ1IjoiYWdrZXJyIiwiYSI6ImNreXEzMW93bTBnMmQyd20xdXdjeW5nZmEi
 #   rdw_cbs,
 #   profile = "walking",
 #   time = c(5,10,15)
-# )
+# ) %>% mutate(
+# mode = "driving")
 # 
 # isochrone[1:3,] %>% mapview()
 # 
-# saveRDS(isochrone,"isochrone_rwc_walking.RDS")
+#saveRDS(isochrone,"isochrone_rwc_walking.RDS")
 
-isochrone <- readRDS("isochrone_rwc_walking.RDS")
-```
-
-```{r}
 # isochrone_2 <- mb_isochrone(
 #   rdw_cbs,
 #   profile = "driving",
 #   time = c(5,10,15)
-# )
+# ) %>% mutate(
+# mode = "driving")
 # 
-# isochrone_2[1:3,] %>% mapview
+# isochrone_2[1:3,] %>% mapview()
 # 
-#saveRDS(isochrone_2, "isochrone_rwc_driving.RDS")
+# saveRDS(isochrone_2, "isochrone_rwc_driving.RDS") 
 
+# isochrone_3 <- mb_isochrone(
+#   rdw_cbs,
+#   profile = "cycling",
+#   time = c(5,10,15)
+# ) %>% mutate(
+#   mode = "biking")
+
+# isochrone_3[1:3,] %>% mapview()
+# 
+# saveRDS(isochrone_3, "isochrone_rwc_biking.RDS")
+
+
+```
+
+```{r}
+
+isochrone <- readRDS("isochrone_rwc_walking.RDS")
 isochrone_2 <- readRDS("isochrone_rwc_driving.RDS")
+isochrone_3 <- readRDS("isochrone_rwc_biking.RDS")
 
+isochrone_combined <- rbind(isochrone, isochrone_2, isochrone_3)
 
 # Use driving for hospital analysis. Use walking for other POIs. 
 ```
 
+```{r echo=FALSE, results='hide', fig.keep='all', message = FALSE}
+sf::sf_use_s2(FALSE)
+access_raw <- isochrone_combined %>% 
+  st_make_valid() %>%
+  st_join(bay_pois_filter) %>% 
+  st_drop_geometry()
 
+```
+
+Next, the subjective weights for each amenity were created so the "completeness score" could be determined. The weights were used in a decay function, which reduced the value of amenities based on distance and quantity. The subjectively determined amenity and mode values can be seen in the tables below. 
+
+```{r}
+amenity_preference <- data.frame(
+  amenity = c(
+    "park",
+    "supermarket",
+    "pharmacy",
+    "bank",
+    "school",
+    "doctors",
+    "restaurant",
+    "bar",
+    "pub",
+    "pitch",
+    "playground",
+    "hospital",
+    "theatre"
+  ),
+  amenity_value = c(
+    0.9,
+    1,
+    0.5,
+    0.5,
+    0.8,
+    0.6,
+    0.7,
+    0.7,
+    0.7,
+    0.8,
+    0.8,
+    0.9,
+    0.3
+  ),
+  amenity_quantity = c(
+   2,
+   2,
+   1,
+   1,
+   1,
+   2,
+   20,
+   5,
+   5,
+   10,
+   5,
+   1,
+   2
+  )
+) %>% 
+  mutate(
+    amenity_decay = -log(0.5)/(amenity_quantity)
+  )
+
+mode_preference <- data.frame(
+  mode = c(
+    "walking",
+    "biking",
+    "driving"
+  ),
+  mode_value = c(
+    1,
+    0.5,
+    0.7
+  ),
+  mode_reasonable = c(
+    15,
+    15,
+    25
+  )
+) %>% 
+  mutate(
+    mode_decay = -log(0.5)/mode_reasonable
+  )
+
+amenity_preference
+mode_preference
+```
+
+
+A baseline "completeness score" was calculated as a reference point for the other scores. This baseline assumes all the amenities were 15 minutes away and each amenity had the same number of instances as the amenity quantity. This can be used to normalize the actual completeness scores. The "completeness values" seen below are a relative value, as the calculated value was divided by the baseline. 
+
+
+```{r}
+complete_baseline <- data.frame(
+  amenity = amenity_preference$amenity %>% 
+    rep(amenity_preference$amenity_quantity)
+) %>% 
+  left_join(
+    amenity_preference,
+    by = "amenity"
+  ) %>% 
+  group_by(amenity) %>% 
+  mutate(
+    amenity_rank = row_number() - 1
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    score = amenity_value * exp(-amenity_rank * amenity_decay) * 0.5
+  ) # ASSUMES ALL 0.5, or mode_factor for 15 min of any transport means
+
+#sum(complete_baseline$score)
+```
+
+From here, the POIs that were within each census blocks' isochrones were determined. The completeness score was calculated ny multiplying the amenity value, amenity rank, and mode value. The decay function was applied to both the amenity rank and mode value. The results can be seen in the map below.  
+
+```{r}
+complete_temp <- access_raw %>%
+  left_join(
+    amenity_preference,
+    by = "amenity"
+  ) %>%
+  select(-amenity_quantity) %>%
+  left_join(
+    mode_preference,
+    by = "mode"
+  ) %>%
+  select(-mode_reasonable) %>% 
+  group_by(id,mode,amenity) %>%
+  arrange(time) %>%
+  mutate(
+    amenity_rank = row_number() - 1
+  ) %>% 
+  ungroup()
+```
+
+```{r}
+ complete_modes <- complete_temp %>% #for one mode only
+    mutate(
+      score = amenity_value *exp(-amenity_rank * amenity_decay) * exp(-time * mode_decay)
+    ) %>%
+    group_by(id, mode) %>%
+    arrange(desc(score)) %>%
+    filter(!duplicated(osm_id)) %>%
+    summarize(
+      score = sum(score, na.rm=T)/sum(complete_baseline$score)
+    )
+```
+
+```{r}
+complete_total <- complete_temp %>%
+  mutate(
+      score = amenity_value *exp(-amenity_rank * amenity_decay) * mode_value * exp(-time * mode_decay)
+    ) %>%
+  group_by(id) %>%
+  arrange(desc(score)) %>%
+  filter(!duplicated(osm_id)) %>%
+  summarize(
+    score = sum(score, na.rm = T)/sum(complete_baseline$score)
+  ) %>%
+  mutate(mode = "total")
+
+complete <- rbind(
+  complete_modes,
+  complete_total
+)
+
+complete_map <- complete %>%
+  pivot_wider(
+    names_from = "mode",
+    values_from = "score"
+  ) %>%
+  cbind(rdw_cbs %>% select(GEOID10)) %>%
+  st_as_sf()
+
+mapview(complete_map, zcol = "total")
+```
+
+
+The results of this "completeness score" make sense given the layout of Redwood City. The higher scores are clustered downtown and gradually decrease as you move further from downtown. The lowest scores are found in the Harbour and Bair Island State Park which make sense as that area has very few amenities. 
+
+# Equity Analysis
+
+While visualizing a completeness score is interesting, it can be useful to determine what the distribution of these scores is. For this analysis, the distribution of race in Redwood City will be determined based on their completeness score. Decennial census data was used as it correlates to the block level, and a pie chart was developed showing the percentage of each race that is above/below the median completeness score. This represents the first "final analysis".
+
+
+```{r}
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+dec_vars_2020 <-
+  listCensusMetadata(
+    name = "2020/dec/pl",
+    type = "variables"
+  )
+
+rwc_pop_race_2020 <-
+  getCensus(
+    name = "dec/pl",
+    vintage = 2020,
+    region = "block:*", 
+    regionin = "state:06+county:081",
+    vars = "group(P1)"
+  ) %>% 
+  mutate(
+    block =
+      paste0(state,county,tract,block)
+  ) %>% 
+  select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>% 
+  pivot_longer(
+    ends_with("N"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    dec_vars_2020 %>% 
+      select(name, label)
+  ) %>% 
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"category1","category2"),
+    sep = "!!"
+  ) %>%
+  left_join(
+    rdw_cbs %>%
+      select("GEOID10"),
+    by = c("block"="GEOID10") 
+  ) %>%
+  select(-category1)
+
+score_median = median(complete_map$total) 
+  
+rwc_filter <- rwc_pop_race_2020 %>%
+  filter(!is.na(category2)) %>%
+  left_join(
+    complete_map %>%
+      select("total"),
+    by = 'geometry'
+  ) %>%
+  filter(!is.na(total)) %>%
+  mutate(
+    Threshold = ifelse(total>score_median,"Above Median","Below Median")
+  ) %>%
+  mutate(
+    race = case_when(
+      category2 %in% c("White alone")~"White",
+      category2 %in% c("Black or African American alone")~"Black or African American",
+      category2 %in% c("American Indian and Alaska Native alone")~"American Indian and Alaska Native",
+      category2 %in% c("Asian alone")~"Asian",
+      category2 %in% c("Native Hawaiian and Other Pacific Islander alone")~"Native Hawaiian and Other Pacific Islander",
+      category2 %in% c("Some Other Race alone", "Population of two races:", "Population of three races:" , "Population of four races:" , "Population of five races:",  "Population of six races:")~"Other"
+    )
+  ) %>%
+  group_by(
+    Threshold, race
+  ) %>%
+  summarize(
+   estimate=sum(estimate)
+  ) %>%
+  group_by(
+    Threshold
+  ) %>%
+  mutate(
+    perc = estimate/sum(estimate) *100
+  )
+
+df2 <- rwc_filter %>% 
+  mutate(csum = rev(cumsum(rev(perc))), 
+         pos = perc/2 + lead(csum, 1),
+         pos = if_else(is.na(pos), perc/2, pos))
+
+rwc_filter %>% 
+  ggplot(data = rwc_filter,
+         mapping = aes(x = "" , 
+             y = perc, 
+             fill = fct_inorder(race)
+         )) +
+  geom_col(width = 1, color = 1) +
+  coord_polar(theta = "y") +
+  facet_wrap(~Threshold) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_label_repel(data = df2,
+                  mapping = aes(y = pos, label = paste0(round(perc), "%")),
+                   size = 3, nudge_x = 1, show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Completeness Score by Race")) +
+  theme_void()
+
+```
+
+The results reveal insight into the breakdown of rank and completeness score in Redwood City. In particular, it seems that there are more Asian and White people below the median completeness score, but more "other" races above the median than one would expect. Wealthy areas are typically more suburban and further from main streets with amenities. Due to the high proportion of wealthy White and Asian people in Redwood City, this could explain the below-average scores for these races. However, this hypothesis could be confirmed through the inclusion of income into this analysis. 
+
+# Critical Amenity Analysis
+
+The critical amenity analysis will determine who has "minimum access" to hospitals; in this case, this was chosen to be a 10 minute drive. This was completed by determining if there was a hospital within the 10 minute driving isochrone. Note that this represents the third modification to the suggested analysis. The output can be seen below. 
+
+```{r}
+access_raw2 <- isochrone_2 %>% 
+  st_make_valid() %>%
+  st_join(bay_pois_filter2) %>% 
+  st_drop_geometry() %>%
+  filter(!is.na(osm_id)) %>%
+  group_by(
+    id
+  ) %>%
+  mutate(
+    mintime = min(time)
+  ) %>%
+  left_join(
+    complete_map%>%
+      select(id,geometry),
+    by="id"
+  ) %>%
+  filter(!duplicated(id)) %>%
+  mutate(
+    Access = ifelse(mintime>10,"No","Yes")
+  ) %>%
+  st_as_sf()
+
+mapview(access_raw2, zcol="Access")
+```
+
+
+While the above map is useful, it would be interesting to see how the addition of a hospital in the neighbourhood would affect the completeness score. This is a hypothetical demonstration of how a potential development could change access in the community. This represents our second "final analysis". This was completed by manually adding a new POI into the hospital dataset. The location of the proposed POI can be seen below on the map of existing hospitals in the Bay Area.
+
+
+```{r}
+new_hospital <- data.frame(
+  osm_id=00000001, code = 2110, amenity = "hospital", name = "New Hospital")
+
+newhospital_point <- as.data.frame(37.48956) %>%
+  rename(lat = "37.48956") %>%
+  mutate(lon = -122.2239) %>%
+  sf::st_as_sf(., coords = c("lon", "lat"), crs = 4326)
+
+new_hospital <- new_hospital %>%
+  cbind(newhospital_point) %>%
+  st_as_sf(crs=4326)
+  
+#mapview(new_hospital)
+
+bay_pois_filternew <- bay_pois_filter2 %>%
+  rbind(new_hospital)
+
+mapview(bay_pois_filternew)
+
+```
+
+Similar to the other access methodology, the critical analysis was completed by determining if there was a hospital within the 10 minute driving isochrone. However, now the POIs included the hypothetical hospital development. The updated access plot can be seen below. 
+
+
+```{r}
+
+access_raw3 <- isochrone_2 %>% 
+  st_make_valid() %>%
+  st_join(bay_pois_filternew) %>% 
+  st_drop_geometry() %>%
+  filter(!is.na(osm_id)) %>%
+  group_by(
+    id
+  ) %>%
+  mutate(
+    mintime = min(time)
+  ) %>%
+  left_join(
+    complete_map%>%
+      select(id,geometry),
+    by="id"
+  ) %>%
+  filter(!duplicated(id)) %>%
+  mutate(
+    Access = ifelse(mintime>10,"No","Yes")
+  ) %>%
+  st_as_sf() 
+
+mapview(access_raw3, zcol="Access")
+
+```
+
+
+Clearly, with the addition of a hypothetical hospital access significantly increased in Redwood City. This is an interesting tool to determine the effect of developments on neighborhood amenities. 
+
+
+# Conclusion
+
+In all, the complete community score analysis can be useful when determining the amenities one values in a neighborhood. It provides an easy to understand ranking for each geographical subarea, and can help guide decisions and experiment with the impacts of future development. However, there are pros and cons to this analysis. The results are dependent on the inputted weightings and are mostly subjective. While this can be fixed by using survey data (similar to the approach taken in this study), this still does not perfectly meet each resident's requirements. Due to the highly varying nature of the amenities people desire, it is difficult to create on all-encompassing score. 
+
+For this reason, the original plan was to complete a 'Walk Score' for each census block. Since the Walk Score was used as a basis for developing this completeness score, it would be interesting to compare the calculated completeness score and the walk score for each census block. The walkscoreAPI library could be used, which allows for the calculation of the Walk Score for a geographical point. However, due to the long wait time in receiving an API key, the analysis could not be completed. This is something that could be an area of future work to verify the completeness score (for walking isochrones) developed in this study. The sample code can be seen in the Rmd. file. 
+
+```{r}
+#Walk Score Comparision
+
+# library(walkscoreAPI)
+# 
+# 
+# rwc_centroid <- rdw_cbs %>%
+#   st_centroid() %>%
+#   extract(geometry, c('lat', 'lon'), '\\((.*), (.*)\\)', convert = TRUE)
+# 
+# 
+# getWS("longitude", "latitude", key)
+
+#Compare walking score (out of 100) to completeness score (out of 1)
+
+```
+
+
+# References:
+
+Quality of Life in the Kansas City Area (2019). Retrived from:
+https://marc2.org/kcqualityoflife/2018/Ch4_amenitiesbydemographic_topthree.htm
+
+Walk Score (2022). Retrieved from: https://www.walkscore.com/methodology.shtml
+
+
+
+  

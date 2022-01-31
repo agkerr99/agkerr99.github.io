@@ -115,7 +115,13 @@ access_raw <- isochrones %>%
 
 ```{r}
 amenity_preference <- data.frame(
-  amenity = c("park","convenience","restaurant","supermarket","library"),
+  amenity = c(
+    "park",
+    "convenience",
+    "restaurant",
+    "supermarket",
+    "library"
+  ),
   amenity_value = c(
     0.8,
     0.6,
@@ -132,7 +138,95 @@ amenity_preference <- data.frame(
   )
 ) %>% 
   mutate(
-    amenity_decay = -log(0.5)/amenity_quantity
+    amenity_decay = -log(0.5)/(amenity_quantity)
   )
+
+mode_preference <- data.frame(
+  mode = c(
+    "walking",
+    "biking",
+    "driving"
+  ),
+  mode_value = c(
+    1,
+    0.7,
+    0.5
+  ),
+  mode_reasonable = c(
+    15,
+    10,
+    20
+  )
+) %>% 
+  mutate(
+    mode_decay = -log(0.5)/mode_reasonable
+  )
+
+complete_baseline <- data.frame(
+  amenity = amenity_preference$amenity %>% 
+    rep(amenity_preference$amenity_quantity)
+) %>% 
+  left_join(
+    amenity_preference,
+    by = "amenity"
+  ) %>% 
+  group_by(amenity) %>% 
+  mutate(
+    amenity_rank = row_number() - 1
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    score = amenity_value * exp(-amenity_rank * amenity_decay) * 0.5
+  ) # ASSUMES ALL 0.5, or mode_factor for 15 min of any transport means
+
+sum(complete_baseline$score)
+```
+
+```{r}
+complete_temp <- access_raw %>%
+  left_join(
+    amenity_preference,
+    by = "amenity"
+  ) %>%
+  select(-amenity_quantity) %>%
+  left_join(
+    mode_preference,
+    by = "mode"
+  ) %>%
+  select(-mode_reasonable) %>% 
+  group_by(id,mode,amenity) %>%
+  arrange(time) %>%
+  mutate(
+    amenity_rank = row_number() - 1
+  ) %>% 
+  ungroup()  #completeness score by mode here OR overall completeness score across all 
+  
+  complete_modes <- complete_temp %>%
+    mutate(
+      score = amenity_value *exp(-amenity_rank * amenity_decay) * exp(-time * mode_decay)
+    ) %>%
+    group_by(id, mode) %>%
+    arrange(desc(score)) %>%
+    filter(!duplicated(osm_id)) %>%
+    summarize(
+      score = sum(score, na.rm=T)/sum(complete_baseline$score)
+    )
+    
+  # could sort by amenity after left joins (based on distance), or could sort by YELP scores or something, but adds another layer of subjectivity to it. Further resource challenge to get accurate sibjective information int he communities youre looking for. 
+# id = census block group
+
+complete_total <- complete_temp %>%
+  mutate(
+      score = amenity_value *exp(-amenity_rank * amenity_decay) * mode_value * exp(-time * mode_decay)
+    ) %>%
+  group_by(id) %>%
+  arrange(desc(score)) %>%
+  filter(!duplicated(osm_id)) %>%
+  summarize(
+    score = sum(score, na.rm = T)/sum(complete_baseline$score)
+  ) %>%
+  mutate(mode = "total")
+
+
 ```
 
