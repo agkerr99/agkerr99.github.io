@@ -1,0 +1,87 @@
+---
+title: "Week5Thursday"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(tigris)
+library(sf)
+library(leaflet)
+
+
+
+ca_od_read <- read_csv("/Volumes/GoogleDrive/Shared drives/SFBI/Data Library/LODES/ca_od_main_JT01_2019.csv.gz")
+
+```
+
+```{r}
+zctas <- zctas()
+
+zip <- zctas %>% 
+  filter(GEOID10 == "94303")
+
+blocks <- blocks("CA")
+
+zip_blocks <- blocks %>%
+  st_centroid() %>%
+  .[zip,] # blocks within zip code
+```
+
+```{r}
+zip_od <- ca_od_read %>% 
+  filter(
+    h_geocode %in% zip_blocks$GEOID10 |
+      w_geocode %in% zip_blocks$GEOID10
+  ) # this is the LODES data with home or work within chosen zip blocks 
+
+rm(ca_od_read)
+```
+
+```{r}
+full_zip_od <- 2013:2019 %>% 
+  map_dfr(function(year){
+    
+    print(year)
+    
+    temp <- read_csv(paste0("/Volumes/GoogleDrive/Shared drives/SFBI/Data Library/LODES/ca_od_main_JT01_", year, ".csv.gz")) %>% 
+      filter(
+        h_geocode %in% zip_blocks$GEOID10 |
+          w_geocode %in% zip_blocks$GEOID10
+      ) %>% 
+      mutate(year = year)
+    
+    saveRDS(temp, paste0("temp_od_", year, ".rds"))
+    
+    return(temp)
+    
+  })
+
+full_zip_od <- readRDS("full_zip_od.rds")
+
+# cannot run routing function 215000 times so will aggregate anything in EPA upwards to the entire zipcode
+# do not need block to block analysis, cbg to cbg or ziptozip
+# 94303 to 94303 is lost due to zip to zip aggregation, 
+# ASSUMPTIONL filtering out zip to zip trips -- i know they are not zero. but could just do routing for internal trips later on (number of blocks to number of blocks)
+# DOUBLE CHECK THESE INTERNAL TRIPS LATER ON FOR BONUS MARKS
+```
+
+```{r}
+full_zip_od_clean <- full_zip_od %>% 
+  select(-createdate) %>% 
+  filter(!(
+    h_geocode %in% zip_blocks$GEOID10 &
+      w_geocode %in% zip_blocks$GEOID10
+  )) %>% 
+  mutate(
+    direction = ifelse(
+      h_geocode %in% zip_blocks$GEOID10,
+      "outbound",
+      "inbound"
+    )
+  )
+   #NEED TO COME UP WITH CREATIVE WAYS - for example duplicate trips over diff years, same trip reversed, etc 
+    #removing "negligible" zip to zip trips,... check this later
+```
+
