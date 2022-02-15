@@ -27,6 +27,8 @@ blocks <- blocks("CA")
 zip_blocks <- blocks %>%
   st_centroid() %>%
   .[zip,] # blocks within zip code
+
+zip_blocks <- readRDS("zip_blocks.rds")
 ```
 
 ```{r}
@@ -83,5 +85,120 @@ full_zip_od_clean <- full_zip_od %>%
   )
    #NEED TO COME UP WITH CREATIVE WAYS - for example duplicate trips over diff years, same trip reversed, etc 
     #removing "negligible" zip to zip trips,... check this later
+```
+
+```{r}
+full_zip_od_routing <- full_zip_od_clean %>% 
+  mutate(
+    origin = ifelse(
+      direction == "inbound",
+      h_geocode,
+      w_geocode
+    ),
+    cbg = origin %>% substr(1,12),
+    tract = origin %>% substr(1,11)
+  ) %>% filter(!duplicated(tract))
+```
+
+```{r}
+ca_tracts <- tracts("CA")
+
+zip_od_origin <- full_zip_od_routing %>% 
+  select(tract) %>%
+  left_join(ca_tracts %>% select(tract = GEOID)) %>%
+  st_as_sf() %>%
+  st_centroid() %>%
+  st_coordinates()
+```
+
+```{r}
+zip_od_destination <-
+  zip %>% 
+  st_centroid() %>% 
+  st_coordinates()
+  
+zip_od_route <- 
+  1:nrow(zip_od_origin) %>%
+  map_dfr(function(x){
+    
+    tryCatch(
+      mb_directions(
+        origin = zip_od_origin[x, ],
+        destination = zip_od_destination,
+        profile = "driving-traffic"
+      ) %>% 
+        mutate(id = x),
+      error = function(e){
+        data.frame(id = x)
+      }
+    )
+    
+    
+  }) %>% 
+  st_as_sf()
+
+
+```
+
+```{r}
+# Better way to cut up the loop so it saves progress every 1000
+
+zip_od_route <- 
+  1:ceiling(nrow(zip_od_origin)/1000) %>% 
+  map_dfr(function(y){
+    
+    print(y)
+    
+    temp <- (y * 1000 - 999) : pmin(y * 1000, nrow(zip_od_origin)) %>% 
+      map_dfr(function(x){
+        tryCatch(
+          mb_directions(
+            origin = zip_od_origin[x, ],
+            destination = zip_od_destination,
+            profile = "driving-traffic"
+          ) %>% 
+            mutate(id = x),
+          error = function(e){
+            data.frame(id = x)
+          }
+        )
+      }) %>% 
+      st_as_sf()
+      
+      saveRDS(temp, paste0("temp",y,".rds"))
+      
+      return(temp)
+    
+  })
+```
+
+```{r}
+  
+zip_od_route <- readRDS("zip_od_route.rds") # cbg level
+full_zip_od_route <- readRDS()
+
+full_zip_od_routed <- zip_od_route %>%
+  cbind()
+
+full_zip_od_final <- full_zip_od_clean %>% 
+  mutate(
+    origin = ifelse(
+      direction == "inbound",
+      h_geocode,
+      w_geocode
+    ),
+    cbg = substr(origin, 1, 12)
+  ) %>% 
+  left_join(
+    full_zip_od_routed %>% 
+      select(cbg, duration, distance)
+  ) %>% 
+  mutate(
+    visits = S000 * 261
+  )
+```
+
+```{r}
+
 ```
 
