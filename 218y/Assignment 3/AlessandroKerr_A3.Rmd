@@ -7,7 +7,7 @@ output: html_document
 
 # Introduction
 
-The purpose of this report is to analyze greenhouse gas (GHG) emissions in the Bay Area. For this study, Atherton (zip-code 94027) will be focused on between the years of 2013 and 2019. Atherton is an incorporated town in San Mateo County, and is best known for being an affluent community, often being the most expensive zip-code in the US. For this reason, it is expected that many of the emissions will be a result of residential activities. However, it will be interesting to see how much of these emissions are commercial versus residential, and how the split differs between vehicle and building emissions. 
+The purpose of this report is to analyze greenhouse gas (GHG) emissions in the Bay Area. For this study, Atherton (zip code 94027) will be focused on between the years of 2013 and 2019. Atherton is an incorporated town in San Mateo County which is best known for being an affluent community, often the most expensive zip code in the US. For this reason, it is expected that many of the emissions will be a result of residential activities. However, it will be interesting to see how much of these emissions are commercial versus residential, and how the split differs between vehicle and building emissions. 
 
 
 ```{r setup, include=FALSE}
@@ -133,7 +133,7 @@ test <- full_zip_od %>%
 ```
 
 
-Another key assumption for this study is that all inter-zipcode trips are zero. This was done as a means of minimizing the amount of mapbox trip routing that had to be completed. As seen below, very few of the trips in Atherton are inter-zipcode, and these trips are very small relative to all incoming/outgoing work trips. 
+Another key assumption for this study is that all inter-zipcode trips are zero. This was done as a means of minimizing the amount of MapBox trip routing that had to be completed. As seen below, very few of the trips in Atherton are inter-zipcode, and these trips are very small relative to all incoming/outgoing work trips.
 
 
 ```{r}
@@ -142,7 +142,7 @@ paste0("Percent of Trips That are Inter-zipcode: ", round((sum(test$S000)/sum(fu
 
 ```
 
-The plot below shows all the origins of the trips to Atherton between 2013 and 2019. One key assumption for this map is that it only includes trips that occured by more than one person. This was done for clarity as the map was difficult to follow with every trip represented.
+The plot below shows all the origins/destinations of the trips to Atherton between 2013 and 2019. In this case, for inbound trips it shows the origin census block, whereas for outbound trips it shows the destination census block. One key assumption for this map is that it only includes trips that occured by more than one person. This was done for clarity as the map was difficult to follow with every trip represented. Use the check box on the right side to toggle between inbound and outbound trips.
 
 
 ```{r}
@@ -450,7 +450,7 @@ emfac <-
 emfac
 ```
 
-The greenhouse gases (in metric tonnes of CO2) for outbound trips from Atherton can be seen below for 2013 to 2019.
+The greenhouse gases (in metric tonnes of CO2) for outbound trips from Atherton can be seen below for 2013 to 2019. It is interesting to note the relatively small value for 2013 GHG emissions -- this is likely a data error as the same process was repeated for inbound trips and no such trend existed.
 
 ```{r}
 atherton_outbound_trips_ghg <- atherton_trips_outbound %>%
@@ -657,7 +657,7 @@ total_ghg_atherton
 
 # Building Emissions
 
-Now, an analysis based on building emissions in Atherton will be completed. PG&E data will be used to determine both residential and commercial gas and electricity use. The plot below shows the fluctuation in commercial and residential gas and electricity use in Atherton betweebn 2013 and 2019.
+Now, an analysis based on building emissions in Atherton will be completed. PG&E data will be used to determine both residential and commercial gas and electricity use. The plot below shows the fluctuation in commercial and residential gas and electricity use in Atherton between 2013 and 2019.
 
 ```{r}
  pge_elec_emissions_factor <-
@@ -810,7 +810,7 @@ Note the following units for each category of energy usage:
 
 Residential Electricity: KBTU/resident/CDD,
 Residential Gas: KBTU/resident/HDD,
-Commerical Electricity: KBTU/job/CDD,
+Commecical Electricity: KBTU/job/CDD,
 Commercial Gas: KBTU/job/HDD
 
 The plot with the breakdown of normalized energy usage can be seen below:
@@ -1001,7 +1001,7 @@ ggplot() +
 
 Overall, the trends in Atherton build off the previous results. In terms of trying to predict and ultimately lessen the future of Atherton GHG trends, there are several ideas that come to mind. First, given the last plot which showed building versus vehicle emissions, it seems Atherton is in a unique position in the Bay Area. Unlike most communities that are home to expanding industry, Atherton is mainly residential. For this reason, building emissions have been decreasing year-by-year. PG&E is partly responsible as they have been working towards a cleaner electricity mix. Therefore, in terms of areas of focus for Atherton moving forward, it seems that Vehicle emissions should be focussed on. Aspects such as EV adoption and surrounding job growth will play a large role in Atherton's GHG emissions. More specifically, further analysis could be completed looking into the actual vehicle type breakdown (gas, electric, etc) for Atherton specifically, rather than the entire Bay Area. Given the affluent nature of Atherton, it is possible they already have a higher EV rate. Nonetheless, looking forward, Atherton should shift their focus towards reducing vehicle emissions by increasing EV adoption, public transit use, and considering job growth areas.
 
-The allocation of GHG is a problematic topic due to the different methodologies present. In the case of this analysis, all incoming and outgoing trips were allocated to Atherton. However, there are other methods which allocate emissions based on fuel sales, induced activity, resident activity, and geographic boundaries. Each method has its advantages and disadvantages, but a hybrid approach may be best suited to account for GHG emissions. A combination of resident activity and geographical boundaries could be used. This approach would keep towns/cities responsible for part of their resident's emissions, encouraging local job growth and shortening commutes. Whereas, it also keeps big cities (like SF) which draw in a lot of commuters accountable for some emissions. This method balances the geographical proximity to large cities and the potential economic benefits with responsibility for emissions -- that being, cities that are closer to SF may incur more responsibility for emissions but also garner economic benefits from being closer to the city. 
+The allocation of GHG is a problematic topic due to the different calculation methodologies. In the case of this analysis, all incoming and outgoing trips were allocated to Atherton. However, there are other methods which allocate emissions based on fuel sales, induced activity, resident activity, and geographic boundaries. Each method has its advantages and disadvantages, but a hybrid approach may be best suited to account for GHG emissions. A combination of resident activity and geographical boundaries could be used. This approach would keep towns/cities responsible for part of their resident's emissions, encouraging local job growth and shortening commutes. Whereas, it also keeps big cities (like SF) which draw in a lot of commuters accountable for some emissions. This method balances the geographical proximity to large cities (and the potential economic benefits) with responsibility for emissions. In other words, cities that are closer to SF may incur more responsibility for emissions but also garner economic benefits from being closer to the city. 
 
 Overall, it was interesting to see the overall building and vehicle emissions for Atherton, and pinpointing what areas they should focus on moving forward.
 
