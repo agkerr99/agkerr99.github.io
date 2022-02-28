@@ -1,0 +1,974 @@
+---
+title: "AlessandroKerr_A4"
+author: "Alessandro Kerr"
+date: "3/1/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(raster)
+library(stringr)
+library(tigris)
+library(tidyverse)
+library(readxl)
+library(censusapi)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(tidycensus)
+library(mapview)
+library(dplyr)
+library(ggrepel)
+library(ggplot2)
+library(jsonlite)
+library(stars)
+library(mapboxapi)
+library(tiff)
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+```
+# Introduction
+
+The purpose of this report is to prepare a hazard risk assessment for one or more CBGs in the Bay Area. By making use of the 'Our Coast Our Future' website, an area of study was determined. For a scenario of 50cm sea level rise (SLR), and a 100 year return period (RP), a significant part of Foster City, California is at flood risk. For this reason, the northern zip code of Foster City (94404) was selected as the study region. The end goal will be to determine the average annualized loss (AAL) for vehicle damages in each census block within the Foster City zipcode between the years of 2020 and 2050. 
+
+
+# Part 1 - Flood Maps for Foster City
+
+First, the boundary for the selected zipcode in Foster City can be seen below. 
+```{r}
+#San Mateo Zips & Blocks
+
+# zctas <- zctas()
+# 
+# zip <- zctas %>% 
+#   filter(GEOID10 == "94404")
+# 
+# saveRDS(zip, "zip.rds")
+
+zip <- readRDS("zip.rds")
+# 
+# zip_blocks <-
+#   blocks("CA","San Mateo", progress_bar = F, year = 2020) 
+# zip_blocks <- zip_blocks %>%
+#   .[zip,]
+# 
+# saveRDS(zip_blocks, "zip_blocks.rds")
+  
+
+zip_blocks <- readRDS("zip_blocks.rds")
+```
+
+```{r}
+mapview(zip)
+```
+
+From here, the TIF files were imported for several SLR (0cm, 25cm and 50cm), and RP (1 year, 20 year and 100 year) scenarios. 
+```{r}
+
+# for(slr in c("000","025","050")){
+#   
+#   for(rp in c("001","020","100")){
+#     
+#     print(paste0("SLR",slr,"_RP",rp))
+#     
+#     path <- paste0("/Volumes/GoogleDrive-112836525701087151759/Shared drives/SFBI/Data Library/OCOF/san_mateo_flooding_slr",slr,"/flooding/v2.1/county_san_mateo_flddepth_slr",slr,"_w",rp,".tif")
+#     
+#     flood <- raster(path) %>% 
+#       crop(
+#         zip %>% 
+#           st_transform(26910) %>% 
+#           st_bbox()
+#       )
+#   
+#     writeRaster(flood,paste0("/Users/xander/Documents/GitHub/alexngld.github.io/flood/SLR",slr,"_RP",rp,"_fc_flood.tif"), overwrite = T)
+#     
+#   }
+# }
+
+
+flood_SLR000_RP001<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR000_RP001_fc_flood.tif")
+flood_SLR000_RP020<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR000_RP020_fc_flood.tif")
+flood_SLR000_RP100<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR000_RP100_fc_flood.tif")
+flood_SLR025_RP001<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR025_RP001_fc_flood.tif")
+flood_SLR025_RP020<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR025_RP020_fc_flood.tif")
+flood_SLR025_RP100<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR025_RP100_fc_flood.tif")
+flood_SLR050_RP001<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR050_RP001_fc_flood.tif")
+flood_SLR050_RP020<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR050_RP020_fc_flood.tif")
+flood_SLR050_RP100<-raster("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR050_RP100_fc_flood.tif")
+
+```
+
+```{r}
+
+flood_pal3 <- colorNumeric(
+  palette = "Blues",
+  domain = values(flood_SLR000_RP100),
+  na.color = "transparent"
+)
+
+flood_pal6 <- colorNumeric(
+  palette = "Blues",
+  domain = values(flood_SLR025_RP100),
+  na.color = "transparent"
+)
+
+flood_pal9 <- colorNumeric(
+  palette = "Blues",
+  domain = values(flood_SLR050_RP100),
+  na.color = "transparent"
+)
+
+```
+
+The flood maps for various RPs all within the 0cm SLR scenario for Foster City can be seen below:
+
+```{r}
+leaflet() %>% 
+  addMapboxTiles(
+    style_id = "satellite-streets-v11",
+    username = "mapbox",
+    options = tileOptions(opacity = 0.5)
+  ) %>% 
+  addRasterImage(
+    flood_SLR000_RP001,
+    colors = flood_pal3,
+    group = "flood_SLR000_RP001"
+  ) %>% 
+  addRasterImage(
+    flood_SLR000_RP020,
+    colors = flood_pal3,
+    group = "flood_SLR000_RP020"
+  ) %>%
+    addRasterImage(
+    flood_SLR000_RP100,
+    colors = flood_pal3,
+    group = "flood_SLR000_RP100"
+  ) %>% 
+    addLegend(
+    pal = flood_pal3,
+    values = values(flood_SLR000_RP100),
+    title = "Flood depth, cm"
+  ) %>%
+  addLayersControl(
+    baseGroups = c("flood_SLR000_RP001","flood_SLR000_RP020","flood_SLR000_RP100"),
+    options = layersControlOptions(collapsed = FALSE)
+    )
+```
+
+The flood maps for various RPs all within the 25cm SLR scenario for Foster City can be seen below:
+```{r}
+leaflet() %>% 
+  addMapboxTiles(
+    style_id = "satellite-streets-v11",
+    username = "mapbox",
+    options = tileOptions(opacity = 0.5)
+  ) %>% 
+  addRasterImage(
+    flood_SLR025_RP001,
+    colors = flood_pal6,
+    group = "flood_SLR025_RP001"
+  ) %>% 
+  addRasterImage(
+    flood_SLR025_RP020,
+    colors = flood_pal6,
+    group = "flood_SLR025_RP020"
+  ) %>%
+    addRasterImage(
+    flood_SLR025_RP100,
+    colors = flood_pal6,
+    group = "flood_SLR025_RP100",
+    maxBytes = 5*1024*1024
+  ) %>%
+    addLegend(
+    pal = flood_pal6,
+    values = values(flood_SLR025_RP100),
+    title = "Flood depth, cm"
+  ) %>%
+  addLayersControl(
+     baseGroups = c("flood_SLR025_RP001","flood_SLR025_RP020","flood_SLR025_RP100"),
+    options = layersControlOptions(collapsed = FALSE)
+    )
+  
+```
+
+The flood maps for various RPs all within the 50cm SLR scenario for Foster City can be seen below:
+```{r}
+leaflet() %>% 
+  addMapboxTiles(
+    style_id = "satellite-streets-v11",
+    username = "mapbox",
+    options = tileOptions(opacity = 0.5)
+  ) %>% 
+  addRasterImage(
+    flood_SLR050_RP001,
+    colors = flood_pal9,
+    group = "flood_SLR050_RP001"
+  ) %>% 
+  addRasterImage(
+    flood_SLR050_RP020,
+    colors = flood_pal9,
+    group = "flood_SLR050_RP020",
+    maxBytes = 5*1024*1024
+  ) %>%
+    addRasterImage(
+    flood_SLR050_RP100,
+    colors = flood_pal9,
+    group = "flood_SLR050_RP100",
+    maxBytes = 5*1024*1024
+  ) %>%
+    addLegend(
+    pal = flood_pal9,
+    values = values(flood_SLR050_RP100),
+    title = "Flood depth, cm"
+  ) %>%
+  addLayersControl(
+    baseGroups = c("flood_SLR050_RP001","flood_SLR050_RP020","flood_SLR050_RP100"),
+    options = layersControlOptions(collapsed = FALSE)
+    )
+```
+
+# Part 2 - EMFAC Vehicle Counts in Foster City
+
+In order to estimate the AAL between the years of 2020 to 2050 in Foster City, the vehicle counts for each year are required. This will be accomplished by using census data to obtain the vehicle counts at the census block group level for 2020, then using the Bay Area vehicle counts from EMFAC to determine the average increase between decades. It will be assumed that the vehicles are distributed evenly based on population within each census block. The percent increases in 2030, 2040, and 2050 from the decade before can be seen in the table below:
+```{r}
+emfac <- 
+  read_csv("EMFAC2021-EI-202xClass-SanMateo(SF)2020-2030-2040-2050-Annual-20220218111115.csv", skip = 8) %>%
+  group_by(`Calendar Year`)%>%
+  summarize(`Vehicle Count` = sum(Population)) %>%
+  rbind(NA) %>%
+  mutate(Calc=lag(`Vehicle Count`))%>%
+  mutate(Increase=((`Vehicle Count`/Calc)-1)*100) %>%
+  dplyr::select(`Calendar Year`, Increase) %>%
+  filter(!is.na(Increase))
+
+emfac
+```
+
+```{r}
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables",
+  )
+
+# zip_blocks <- blocks %>%
+#   st_centroid() %>%
+#   .[zip,] %>%
+#   st_drop_geometry() %>%
+#   left_join(blocks %>% select(GEOID10)) %>%
+#   st_as_sf() # blocks within zip code
+# 
+# saveRDS(zip_blocks, "zip_blocks.rds")
+zip_blocks<-readRDS("zip_blocks.rds") %>%
+  mutate(cbg = as.character(substr(GEOID20, 1, 12)))
+
+
+# fc_bg_vehicle <-
+#   getCensus(
+#     name = "acs/acs5",
+#     vintage = 2019,
+#     region = "block group:*",
+#     regionin = "state:06+county:081",
+#     vars = "group(B25044)"
+#   ) %>%
+#   mutate(
+#     cbg =
+#       paste0(state,county,tract,block_group)
+#   ) %>%
+#   dplyr::select(!c(GEO_ID,state,county,tract,block_group,NAME) & !ends_with(c("EA","MA","M"))) %>%
+#   pivot_longer(
+#     ends_with("E"),
+#     names_to = "variable",
+#     values_to = "estimate"
+#   ) %>%
+#   left_join(
+#     acs_vars_2019_5yr %>%
+#       dplyr::select(name, label),
+#     by = c("variable" = "name")
+#   ) %>%
+#   dplyr::select(-variable) %>%
+#   separate(
+#     label,
+#     into = c(NA,NA,"tenure","vehicle"),
+#     sep = "!!"
+#   ) %>%
+#   filter(!is.na(vehicle)) %>%
+#   filter(cbg %in% fc_cbg$GEOID)
+# 
+# fc_no_one_vehicle <- fc_bg_vehicle %>%
+#   group_by(cbg, vehicle) %>%
+#   summarize(estimate = sum(estimate)) %>%
+#   filter(vehicle == "No vehicle available" | vehicle == "1 vehicle available")
+# saveRDS(fc_no_one_vehicle,"fc_no_one_vehicle.rds")
+
+
+# fc_vehicles <- fc_bg_vehicle %>% 
+#   filter(vehicle != "No vehicle available") %>% 
+#   mutate(
+#     vehicles = substr(vehicle, 1,1) %>% as.numeric(),
+#     vehicle_count = vehicles * estimate
+#   ) %>% 
+#   group_by(cbg) %>% 
+#   summarize(estimate = sum(estimate))
+#saveRDS(fc_vehicles, "fc_vehicles.rds")
+
+fc_no_one_vehicle <- readRDS("fc_no_one_vehicle.rds")
+fc_vehicles <- readRDS("fc_vehicles.rds")
+
+```
+
+# Part 3 - Foster City Flood Exposure by Census Block
+
+In this section, the flood exposure for each census block in Foster City will be outlined. First, the breakdown of the census blocks and the zip code can be seen below. From hereon, the census blocks will be used as the geographic boundary despite them being slightly larger than the zipcode.
+
+```{r}
+leaflet() %>% 
+  addMapboxTiles(
+    style_id = "streets-v11",
+    username = "mapbox"
+  ) %>% 
+  addPolygons(
+    data = zip_blocks,
+    fill = F, 
+    weight = 1
+  ) %>%
+  addPolygons(
+    data= zip,
+    fill = F,
+    weight = 2,
+    color = "red"
+  )
+
+```
+
+
+```{r}
+# dec_vars_2020 <-
+#   listCensusMetadata(
+#     name = "2020/dec/pl",
+#     type = "variables"
+#   )
+
+# fc_pop_2020 <-
+#   getCensus(
+#     name = "dec/pl",
+#     vintage = 2020,
+#     region = "block:*",
+#     regionin = "state:06+county:081",
+#     vars = "group(P1)"
+#   ) %>%
+#   mutate(
+#     block =
+#       paste0(state,county,tract,block)
+#   ) %>%
+#   filter(block %in% zip_blocks$GEOID20) %>%
+#   select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>%
+#   pivot_longer(
+#     ends_with("N"),
+#     names_to = "name",
+#     values_to = "estimate"
+#   ) %>%
+#   filter(name=="P1_001N") %>%
+#   left_join(
+#     zip_blocks %>%
+#       select("GEOID20"),
+#     by = c("block"="GEOID20")
+#   ) %>%
+#   st_as_sf()
+
+# saveRDS(fc_pop_2020, "fc_pop_2020.rds")
+
+fc_pop_2020<-readRDS("fc_pop_2020.rds")
+
+```
+
+```{r}
+# path <- "/Volumes/GoogleDrive-112836525701087151759/Shared drives/SFBI/Data Library/OSM/gis_osm_buildings_a_free_1.shp"
+# 
+# osm_bldg <- st_read("/Volumes/GoogleDrive-112836525701087151759/Shared drives/SFBI/Data Library/OSM/gis_osm_buildings_a_free_1.shp")
+# 
+# fc_cbg <- zip_blocks %>% 
+#   st_transform(st_crs(osm_bldg))
+# 
+# bldg_osm <-
+#   osm_bldg[fc_cbg, ]
+# 
+# saveRDS(bldg_osm, "bldg_osm.rds")
+
+```
+
+Next, the OpenStreetMap data was used to import all the buildings in the Foster City zipcode. The buildings can be seen below:
+
+```{r}
+bldg_osm<-readRDS("bldg_osm.rds") %>%
+  st_transform(st_crs(4269))
+
+fc_bldg <- bldg_osm[zip, ] 
+
+mapview(fc_bldg)
+
+```
+
+```{r}
+# mapview(fc_pop_2020)
+
+#mapview(zip_blocks)
+```
+
+In order to filter the data only to buildings that are at flood risk, the most extreme scenario was tested (SLR 50cm with 100 year RP). The buildings that are seen on the map below are at least at risk during the most extreme flooding event -- evidently, it seems that almost all the buildings remain:
+
+```{r}
+flood_max <- 
+  raster("flood/SLR050_RP100_fc_flood.tif")
+
+flood_max_extent <- 
+  flood_max %>% 
+  st_as_stars() %>% 
+  mutate(SLR050_RP100_fc_flood = ifelse(
+    !is.na(SLR050_RP100_fc_flood),
+    1,
+    NA
+  )) %>% 
+  st_as_sf(merge = T) %>% 
+  st_set_crs(26910) %>% 
+  st_make_valid() %>% 
+  st_transform(4326)
+
+fc_bldg_flooded_max <-
+  fc_bldg %>% 
+  st_transform(4326) %>% 
+  .[flood_max_extent,]
+
+```
+
+```{r}
+flood_pal <- colorNumeric(
+  palette = "Blues",
+  domain = values(flood_max),
+  na.color = "transparent"
+)
+
+leaflet() %>% 
+  addMapboxTiles(
+    style_id = "satellite-streets-v11",
+    username = "mapbox",
+    options = tileOptions(opacity = 0.5)
+  ) %>% 
+  addRasterImage(
+    flood_max,
+    colors = flood_pal,
+    opacity = 0.75,
+    maxBytes = 5*1024*1024
+  ) %>% 
+  addPolygons(
+    data = fc_bldg_flooded_max,
+    fill = F,
+    color = "red",
+    weight = 0.5
+  ) %>% 
+  addLegend(
+    pal = flood_pal,
+    values = values(flood_max),
+    title = "Flood depth, cm"
+  )
+
+```
+
+```{r}
+fc_bldg_exposure <- NULL
+
+# for(slr in c("000","025","050")){
+#   
+#   for(rp in c("001","020","100")){
+#     
+#     print(paste0("SLR",slr,"_RP",rp))
+#     
+#     flood <- raster( paste0("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR",slr,"_RP",rp,"_fc_flood.tif"))
+#     
+#     flood_extent <- 
+#       (flood > -Inf) %>% 
+#       st_as_stars() %>% 
+#       st_as_sf(merge = T) %>% 
+#       st_set_crs(26910) %>% 
+#       st_make_valid() %>% 
+#       st_transform(4326)
+#     
+#     fc_bldg_flooded <-
+#       fc_bldg_flooded_max[flood_extent,] %>% 
+#       st_transform(26910)
+#   
+#     if(nrow(fc_bldg_flooded) == 0) {break}
+#       
+#     flood_crop <-
+#       crop(flood, fc_bldg_flooded)
+#     
+#     flood_crop[is.na(flood_crop)] <- 0
+#     
+#     temp <-
+#       raster::extract(
+#         flood_crop,
+#         fc_bldg_flooded,
+#         fun = mean
+#       ) %>% 
+#       as.data.frame() %>% 
+#       rename(avg_depth = V1) %>% 
+#       cbind(
+#         fc_bldg_flooded %>% 
+#           st_drop_geometry() %>% 
+#           dplyr::select(osm_id)
+#       ) %>% 
+#       mutate(
+#         SLR = slr,
+#         RP = rp
+#       )
+#     
+#     fc_bldg_exposure <- 
+#       fc_bldg_exposure %>% 
+#       rbind(temp)
+#     
+#   }
+# }
+# saveRDS(fc_bldg_exposure,"fc_bldg_exposure.rds")
+
+fc_bldg_exposure <- readRDS("fc_bldg_exposure.RDS")
+```
+
+Since the population data (from the Decennial Survey) is available at the block level, and the vehicle data (from the American Community Survey) is available at the census block group (CBG) level, the two were joined using geometry. By assuming a uniform distribution of population in each block, and an even vehicle distribution across population, the number of vehicles per building was calculated.
+```{r}
+sm_cbg <- block_groups("CA","San Mateo", cb = F, progress_bar = F, year = 2019)
+
+fc_cbg<-sm_cbg %>%
+  st_centroid() %>%
+  .[zip,] %>%
+  st_set_geometry(NULL)%>%
+  left_join(
+    sm_cbg %>% select(GEOID)
+    ) %>%
+  st_as_sf()
+  
+```
+
+```{r}
+fc_block_veh_per_bldg <-
+  fc_bldg %>% 
+  filter(type == "residential" | type == "house" | is.na(type)) %>% # any non-residential buildings?
+  select(osm_id) %>% # unique ID for each building
+  st_centroid() %>% 
+  st_join(zip_blocks %>% select(GEOID20)) %>% # block shapes
+  st_join(sm_cbg %>% select(cbg = GEOID)) %>% # cbg shapes
+  st_drop_geometry() %>% 
+  group_by(cbg, GEOID20) %>% # "assuming population is distributed evenly across buildings in a block"
+  summarize(bldg_count = n()) %>% # how to get counts?
+  left_join(fc_pop_2020, by = c("GEOID20" = "block")) %>%
+  rename("pop" = "estimate") %>% # census dataset
+  left_join(fc_vehicles, by = c("cbg")) %>%
+  rename("vehicle" = "estimate") %>% # census dataset
+  filter(!is.na(pop)) %>%
+  filter(!is.na(vehicle)) %>%
+  filter(pop != 0) %>%
+  group_by(cbg) %>% # "and vehicles are distributed evenly across population"
+  mutate(
+    veh_per_person = vehicle/sum(pop),
+    ppl_per_bldg = pop/bldg_count,
+    veh_per_bldg = veh_per_person*ppl_per_bldg # fractional result ok
+  )
+
+
+```
+# Part 4: Vulnerability Data
+
+The next step in the analysis considers the relationship between hazard intensity and damage to the vehicles. This is accomplished by using depth-damage curves provided by the US Army Corps of Engineers. In particular, Economic Guidance Memorandum 09-04 was used to obtain the generic depth-damage curves. It was assumed that all vehicles were sedans for the purpose of this analysis. The depth-damage curve can be seen below.
+```{r}
+vulnerability <- data.frame(
+  depth_above_ground = c(0.5,1:10),
+  perc_damage = c(
+    0.076,
+    0.28,
+    0.462,
+    0.622,
+    0.76,
+    0.876,
+    0.97,
+    1,
+    1,
+    1,
+    1
+  )
+) %>%
+  mutate(
+    depth_cm = depth_above_ground*30.48
+  )
+
+library(ggplot2)
+
+ggplot(vulnerability, aes(depth_above_ground, perc_damage)) +
+  geom_point(shape = 16, size = 5) +
+  theme_minimal() + 
+  geom_line()
+  
+```
+
+```{r}
+# fc_bldg_exposure <-
+#   readRDS("fc_bldg_exposure.rds")
+# 
+# fc_veh_perc_damage <-
+#   approx(
+#     x = vulnerability$depth_cm,
+#     y = vulnerability$perc_damage,
+#     xout = fc_bldg_exposure$avg_depth
+#   ) %>%
+#   .[2] %>%
+#   as.data.frame() %>%
+#   rename(perc_damage = y) %>%
+#   cbind(fc_bldg_exposure) %>%
+#   mutate(
+#     perc_damage = ifelse(
+#       is.na(perc_damage),
+#       0,
+#       perc_damage
+#     ))
+# 
+# saveRDS(fc_veh_perc_damage,"fc_veh_perc_damage.rds")
+
+fc_veh_perc_damage <- readRDS("fc_veh_perc_damage.rds")
+```
+
+```{r}
+fc_veh_perc_damage_plot <- 
+  expand.grid(
+    osm_id = unique(fc_veh_perc_damage$osm_id),
+    SLR = unique(fc_veh_perc_damage$SLR),
+    RP = unique(fc_veh_perc_damage$RP)
+  ) %>% 
+  left_join(fc_veh_perc_damage) %>% 
+  mutate(
+    perc_damage = ifelse(
+      is.na(perc_damage),
+      0,
+      perc_damage
+    ))
+```
+
+
+```{r}
+# library(plotly)
+# 
+# fc_plot <- 
+#   plot_ly() %>% 
+#   add_trace(
+#     data = 
+#       fc_veh_perc_damage_plot %>% 
+#         filter(RP == "100") %>% 
+#         mutate(SLR = SLR %>% as.numeric()),
+#     x = ~avg_depth,
+#     y = ~perc_damage,
+#     frame = ~SLR,
+#     type = 'scatter',
+#     mode = 'markers',
+#     marker = list(
+#       color = 'rgba(17, 157, 255, 0.01)',
+#       size = 15
+#     ),
+#     showlegend = F
+#   ) %>% 
+#   add_trace(
+#     data = vulnerability,
+#     x = ~depth_cm,
+#     y = ~perc_damage,
+#     type = 'scatter',
+#     mode = 'markers',
+#     marker = list(
+#       color = 'rgb(0,0,0)'
+#     ),
+#     showlegend = F
+#   ) %>% 
+#   layout(
+#     xaxis = list(
+#       title = "Average Flood Depth",
+#       zeroline = FALSE
+#     ),
+#     yaxis = list(
+#       title = "Percent Damage"
+#     ),
+#     title = "Foster City building damage during<br>100-year storm, by base sea level rise"
+#   ) %>% 
+#   config(displayModeBar = F)
+# 
+# fc_plot
+```
+
+
+# Part 5: Risk Estimation
+
+Combining all that has been done so far (assessing exposure and vulnerability), the risk estimation can be completed. There were several assumptions that were made during this stage. First, the average value for a vehicle was taken to the $27,000 (from Kelley Blue Book). It was also assumed that no vehicles were immune to flooding, but that 50.5% of residents could move their vehicle with advanced notice (https://planning.erdc.dren.mil/toolbox/library/EGMs/egm09-04.pdf). 
+
+The risk was determined by taking the percent damage for each building, multiplying by the number of vehicles in that building, then multiplying by the value of the vehicle and the percent of vehicles that couldn't move. Using the exceedance rate of the RPs, and the occurance rates of the RCP 4.5 scenario, the AAL could be calculated for each building and census block group. See the plot showing the 2020 and 2050 AAL in Foster City below:
+
+```{r}
+#detach("package:raster")
+
+fc_veh_damage <-
+  fc_veh_perc_damage %>%  
+  left_join(fc_bldg %>% select(osm_id)) %>%
+  st_as_sf() %>%
+  st_centroid() %>%
+  st_join(fc_block_veh_per_bldg %>% st_as_sf() %>% select(veh_per_bldg)) %>%
+  #filter(veh_per_bldg < 4) %>%
+  mutate(
+    damage = perc_damage * veh_per_bldg * 27000 * (1-0.505)
+  ) %>% 
+  select(osm_id, SLR, RP, damage) %>%
+  filter(!is.na(damage))
+```
+
+```{r}
+fc_veh_aal_by_slr <-
+  fc_veh_damage %>% 
+  st_drop_geometry() %>%
+  pivot_wider(
+    names_from = RP,
+    values_from = damage
+  ) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(
+    damage = 
+      0.95*(`001`+`020`)/2 + 
+      0.04*(`020`+`100`)/2 + 
+      0.01*(`100`)
+  ) %>% 
+  select(osm_id, SLR, damage)
+```
+
+```{r}
+rcp45 <- read_csv("https://raw.githubusercontent.com/stanfordfuturebay/stanfordfuturebay.github.io/master/advanced/rcp45_sanfrancisco.csv")
+
+```
+
+```{r}
+fc_veh_aal_by_year <- 
+  fc_veh_aal_by_slr %>% 
+  left_join(
+    rcp45 %>% 
+      mutate(
+        SLR = str_pad(SLR, 3 , "left", "0")
+      ) %>% 
+      select(
+        SLR,
+        `2020`,
+        `2030`,
+        `2040`,
+        `2050`
+      )
+  ) %>% 
+  pivot_longer(
+    `2020`:`2050`,
+    names_to = "year",
+    values_to = "occurrence"
+  ) %>% 
+  pivot_longer(
+    c(damage,occurrence),
+    names_to = "key",
+    values_to = "value"
+  ) %>% 
+  pivot_wider(
+    names_from = c("key","SLR"),
+    values_from = value
+  ) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(
+    damage = 
+      occurrence_050 * (damage_050)
+  ) %>% 
+  mutate(
+    `Calendar Year` = as.numeric(year)
+  ) %>%
+  select(osm_id, `Calendar Year`, damage) %>%
+  left_join(emfac, by = "Calendar Year") %>%
+  mutate(
+    Increase =
+  ifelse(is.na(Increase), 0, Increase)) %>%
+  mutate(
+    projected_damage = damage*(1+Increase/100)) %>%
+  select(osm_id, `Calendar Year`, projected_damage) %>%
+  rename("year" = "Calendar Year") %>%
+  rename("damage" = "projected_damage")
+```
+
+```{r}
+fc_veh_aal_by_year_map <-
+  fc_veh_aal_by_year %>% 
+  pivot_wider(
+    names_from = year,
+    values_from = damage
+  ) %>% 
+  mutate(
+    change = `2050`-`2020`
+  ) %>% 
+  left_join(
+    fc_bldg_flooded_max %>%
+      select(osm_id)
+  ) %>% 
+  st_as_sf() %>% 
+  st_transform(4326)
+```
+
+```{r}
+aal_pal <- colorNumeric(
+  palette = "Reds",
+  domain = c(0,fc_veh_aal_by_year_map$`2050`)
+)
+
+fc_veh_aal_by_year_map %>% 
+  leaflet() %>% 
+  addMapboxTiles(
+    style_id = "light-v9",
+    username = "mapbox"
+  ) %>% 
+  addPolygons(
+    fillColor = ~aal_pal(`2020`),
+    color = "gray",
+    fillOpacity = 1,
+    opacity = 1,
+    weight = 0.25,
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2
+    ),
+    label = ~paste0("$",prettyNum(signif(`2020`,2),",")," average annualized loss in 2020"),
+    group = "2020"
+  ) %>% 
+  addPolygons(
+    fillColor = ~aal_pal(`2050`),
+    color = "gray",
+    fillOpacity = 1,
+    opacity = 1,
+    weight = 0.25,
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2
+    ),
+    label = ~paste0("$",prettyNum(signif(`2050`,2),",")," average annualized loss in 2050"),
+    group = "2050"
+  ) %>% 
+  addPolygons(
+    fillColor = ~aal_pal(change),
+    color = "gray",
+    fillOpacity = 1,
+    opacity = 1,
+    weight = 0.25,
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2
+    ),
+    label = ~paste0("$",prettyNum(signif(change,2),",")," change in average annualized loss from 2020 to 2050"),
+    group = "Change"
+  ) %>% 
+  addLegend(
+    pal = aal_pal,
+    values = ~`2050`,
+    title = "AAL"
+  ) %>% 
+  addLayersControl(
+    baseGroups = c("2020","2050","Change"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>% 
+  showGroup("2050")
+```
+
+There are several takeaways from the plot above. Firstly, while it was attempted to filter the building data to only residential homes, there are clearly some larger buildings that are skewing the results (in the form of apartment buildings). However, since the population of these apartment buildings was included in the population estimates, and they likely own vehicles, the data would be somewhat skewed for total AAL if these were removed. It should be noted that for Foster City, all of the 1 year RP events did not result in flooding, and most of the damage comes from high SLR scenarios. Therefore, the change between 2020 and 2050 is quite substantial. Due to the low probability of these high SLR scenarios, the results might be skewed downwards in terms of damage value, but as these events become a reality there will be a lot of vehicle damage in Foster City. 
+
+
+```{r}
+fc_boundary <- 
+  places("CA", cb = T, progress_bar = F) %>% 
+  filter(NAME == "Foster City")
+
+fc_bgs <- 
+  block_groups("CA", "San Mateo", progress_bar = F) %>% 
+  select(GEOID) %>% 
+  .[fc_boundary, ]
+```
+
+```{r}
+fc_bg_aal <-
+  fc_veh_aal_by_year %>% 
+  pivot_wider(
+    names_from = year,
+    values_from = damage
+  ) %>% 
+  mutate(
+    aal = (`2020`*5 + `2030`*10 + `2040`*10 + `2050`*5)/30
+  ) %>% 
+  left_join(
+    fc_bldg_flooded_max %>%
+      select(osm_id) %>% 
+      st_centroid()
+  ) %>% 
+  st_as_sf() %>% 
+  st_transform(4269) %>% 
+  st_join(fc_bgs) %>% 
+  st_set_geometry(NULL) %>% 
+  group_by(GEOID) %>% 
+  summarize(
+    aal = sum(aal),
+    count = n()
+  ) %>% 
+  left_join(fc_bgs) %>% 
+  st_as_sf()
+```
+
+The total AAL, normalized to an annual loss across buildings can be seen below:
+
+```{r}
+aal_pal <- colorNumeric(
+  palette = "Reds",
+  domain = fc_bg_aal$aal
+)
+
+fc_bg_aal %>% 
+  leaflet() %>% 
+  addMapboxTiles(
+    style_id = "light-v9",
+    username = "mapbox"
+  ) %>% 
+  addPolygons(
+    fillColor = ~aal_pal(aal),
+    color = "gray",
+    fillOpacity = 0.5,
+    opacity = 1,
+    weight = 0.25,
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2
+    ),
+    label = ~paste0("$",prettyNum(signif(aal,2),",")," average annualized loss across ", count, " buildings, 2020-2050")
+  ) %>% 
+  addLegend(
+    pal = aal_pal,
+    values = ~aal,
+    title = "AAL, 2020-2050"
+  )
+```
+
+An important implication of vehicle flooding is for households that only have access to one or no vehicles.
+
+```{r}
+fc_flood_risk <- fc_no_one_vehicle %>%
+  ungroup() %>%
+  mutate(sum_one_no_veh = sum(estimate)) %>%
+  mutate(perc_risk = sum_one_no_veh/nrow(fc_bldg_flooded_max))
+
+paste0("Number of Households at Flood Risk in Foster City with One or No Vehicles: ",round(fc_flood_risk$perc_risk[1]*100,0), " %")
+```
+
+
+
+This high percentage is important because households that have only one (or no) vehicle lose access to daily activities (work, etc).  For households with no vehicles, they become stuck during flooding scenarios. In addition, public transit cannot run during these flooding events giving them no way to leave. 
+
+
+
