@@ -64,7 +64,8 @@ zip_blocks <- readRDS("zip_blocks.rds")
 mapview(zip)
 ```
 
-From here, the TIF files were imported for several SLR (0cm, 25cm and 50cm), and RP (1 year, 20 year and 100 year) scenarios. 
+From here, the TIF files were imported for several SLR (0cm, 25cm and 50cm), and RP (1 year, 20 year and 100 year) scenarios. These come from the Our Coast Our Future website. 
+
 ```{r}
 
 # for(slr in c("000","025","050")){
@@ -479,57 +480,58 @@ leaflet() %>%
 ```
 
 ```{r}
-fc_bldg_exposure <- NULL
-
+# fc_bldg_exposure <- NULL
+# 
 # for(slr in c("000","025","050")){
-#   
+# 
 #   for(rp in c("001","020","100")){
-#     
+# 
 #     print(paste0("SLR",slr,"_RP",rp))
+# 
 #     
 #     flood <- raster( paste0("/Users/alessandrokerr/Documents/agkerr99.github.io/218y/Assignment 4/flood/SLR",slr,"_RP",rp,"_fc_flood.tif"))
-#     
-#     flood_extent <- 
-#       (flood > -Inf) %>% 
-#       st_as_stars() %>% 
-#       st_as_sf(merge = T) %>% 
-#       st_set_crs(26910) %>% 
-#       st_make_valid() %>% 
+# 
+#     flood_extent <-
+#       (flood > -Inf) %>%
+#       st_as_stars() %>%
+#       st_as_sf(merge = T) %>%
+#       st_set_crs(26910) %>%
+#       st_make_valid() %>%
 #       st_transform(4326)
-#     
+# 
 #     fc_bldg_flooded <-
-#       fc_bldg_flooded_max[flood_extent,] %>% 
+#       fc_bldg_flooded_max[flood_extent,] %>%
 #       st_transform(26910)
-#   
-#     if(nrow(fc_bldg_flooded) == 0) {break}
-#       
+#     
+#     if(nrow(fc_bldg_flooded) == 0) {next()}
+# 
 #     flood_crop <-
 #       crop(flood, fc_bldg_flooded)
-#     
+# 
 #     flood_crop[is.na(flood_crop)] <- 0
-#     
+# 
 #     temp <-
 #       raster::extract(
 #         flood_crop,
 #         fc_bldg_flooded,
 #         fun = mean
-#       ) %>% 
-#       as.data.frame() %>% 
-#       rename(avg_depth = V1) %>% 
+#       ) %>%
+#       as.data.frame() %>%
+#       rename(avg_depth = V1) %>%
 #       cbind(
-#         fc_bldg_flooded %>% 
-#           st_drop_geometry() %>% 
+#         fc_bldg_flooded %>%
+#           st_drop_geometry() %>%
 #           dplyr::select(osm_id)
-#       ) %>% 
+#       ) %>%
 #       mutate(
 #         SLR = slr,
 #         RP = rp
 #       )
-#     
-#     fc_bldg_exposure <- 
-#       fc_bldg_exposure %>% 
+# 
+#     fc_bldg_exposure <-
+#       fc_bldg_exposure %>%
 #       rbind(temp)
-#     
+# 
 #   }
 # }
 # saveRDS(fc_bldg_exposure,"fc_bldg_exposure.rds")
@@ -537,7 +539,9 @@ fc_bldg_exposure <- NULL
 fc_bldg_exposure <- readRDS("fc_bldg_exposure.RDS")
 ```
 
+
 Since the population data (from the Decennial Survey) is available at the block level, and the vehicle data (from the American Community Survey) is available at the census block group (CBG) level, the two were joined using geometry. By assuming a uniform distribution of population in each block, and an even vehicle distribution across population, the number of vehicles per building was calculated.
+
 ```{r}
 sm_cbg <- block_groups("CA","San Mateo", cb = F, progress_bar = F, year = 2019)
 
@@ -546,13 +550,16 @@ fc_cbg<-sm_cbg %>%
   .[zip,] %>%
   st_set_geometry(NULL)%>%
   left_join(
-    sm_cbg %>% select(GEOID)
+    sm_cbg %>% dplyr::select(GEOID)
     ) %>%
   st_as_sf()
   
 ```
 
+
 ```{r}
+
+detach("package:raster")
 fc_block_veh_per_bldg <-
   fc_bldg %>% 
   filter(type == "residential" | type == "house" | is.na(type)) %>% # any non-residential buildings?
@@ -705,7 +712,7 @@ fc_veh_perc_damage_plot <-
 
 # Part 5: Risk Estimation
 
-Combining all that has been done so far (assessing exposure and vulnerability), the risk estimation can be completed. There were several assumptions that were made during this stage. First, the average value for a vehicle was taken to the $27,000 (from Kelley Blue Book). It was also assumed that no vehicles were immune to flooding, but that 50.5% of residents could move their vehicle with advanced notice (https://planning.erdc.dren.mil/toolbox/library/EGMs/egm09-04.pdf). 
+Combining all that has been done so far (assessing exposure and vulnerability), the risk estimation can be completed. There were several assumptions that were made during this stage. First, the average value for a vehicle was taken to the $27,000 (from Kelley Blue Book). It was also assumed that no vehicles were immune to flooding, but that 50.5% of residents could move their vehicle with advanced notice. The statistic regarding advanced notice comes from the US Army Corp of Engineers EGM 09-04, and states that with a warning of less than 6 hours, 50.5% could move their vehicle to higher ground (from https://planning.erdc.dren.mil/toolbox/library/EGMs/egm09-04.pdf). 
 
 The risk was determined by taking the percent damage for each building, multiplying by the number of vehicles in that building, then multiplying by the value of the vehicle and the percent of vehicles that couldn't move. Using the exceedance rate of the RPs, and the occurance rates of the RCP 4.5 scenario, the AAL could be calculated for each building and census block group. See the plot showing the 2020 and 2050 AAL in Foster City below:
 
@@ -963,12 +970,13 @@ fc_flood_risk <- fc_no_one_vehicle %>%
   mutate(sum_one_no_veh = sum(estimate)) %>%
   mutate(perc_risk = sum_one_no_veh/nrow(fc_bldg_flooded_max))
 
-paste0("Number of Households at Flood Risk in Foster City with One or No Vehicles: ",round(fc_flood_risk$perc_risk[1]*100,0), " %")
+paste0("Number of Households at Flood Risk in Foster City with One or No Vehicles: ",fc_flood_risk$sum_one_no_veh[1])
+paste0("Percent of Households at Flood Risk in Foster City with One or No Vehicles: ",round(fc_flood_risk$perc_risk[1]*100,0), " %")
 ```
 
 
 
-This high percentage is important because households that have only one (or no) vehicle lose access to daily activities (work, etc).  For households with no vehicles, they become stuck during flooding scenarios. In addition, public transit cannot run during these flooding events giving them no way to leave. 
+This high number and percentage of households with one (or no) vehicle in Foster City is of particular importance. Having only one (or no) vehicle means lost access to daily activities (work, etc).  For households with no vehicles, they become stuck at home during flooding scenarios. In addition, public transit cannot run during these flooding events giving them no way to leave.
 
 
 
