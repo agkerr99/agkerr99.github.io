@@ -661,52 +661,53 @@ fc_veh_perc_damage_plot <-
     ))
 ```
 
+Another interesting plot can be made which relates percent vehicle damage to water depth in each SLR scenario:
 
 ```{r}
-# library(plotly)
-# 
-# fc_plot <- 
-#   plot_ly() %>% 
-#   add_trace(
-#     data = 
-#       fc_veh_perc_damage_plot %>% 
-#         filter(RP == "100") %>% 
-#         mutate(SLR = SLR %>% as.numeric()),
-#     x = ~avg_depth,
-#     y = ~perc_damage,
-#     frame = ~SLR,
-#     type = 'scatter',
-#     mode = 'markers',
-#     marker = list(
-#       color = 'rgba(17, 157, 255, 0.01)',
-#       size = 15
-#     ),
-#     showlegend = F
-#   ) %>% 
-#   add_trace(
-#     data = vulnerability,
-#     x = ~depth_cm,
-#     y = ~perc_damage,
-#     type = 'scatter',
-#     mode = 'markers',
-#     marker = list(
-#       color = 'rgb(0,0,0)'
-#     ),
-#     showlegend = F
-#   ) %>% 
-#   layout(
-#     xaxis = list(
-#       title = "Average Flood Depth",
-#       zeroline = FALSE
-#     ),
-#     yaxis = list(
-#       title = "Percent Damage"
-#     ),
-#     title = "Foster City building damage during<br>100-year storm, by base sea level rise"
-#   ) %>% 
-#   config(displayModeBar = F)
-# 
-# fc_plot
+library(plotly)
+
+fc_plot <-
+  plot_ly() %>%
+  add_trace(
+    data =
+      fc_veh_perc_damage_plot %>%
+        filter(RP == "100") %>%
+        mutate(SLR = SLR %>% as.numeric()),
+    x = ~avg_depth,
+    y = ~perc_damage,
+    frame = ~SLR,
+    type = 'scatter',
+    mode = 'markers',
+    marker = list(
+      color = 'rgba(17, 157, 255, 0.01)',
+      size = 15
+    ),
+    showlegend = F
+  ) %>%
+  add_trace(
+    data = vulnerability,
+    x = ~depth_cm,
+    y = ~perc_damage,
+    type = 'scatter',
+    mode = 'markers',
+    marker = list(
+      color = 'rgb(0,0,0)'
+    ),
+    showlegend = F
+  ) %>%
+  layout(
+    xaxis = list(
+      title = "Average Flood Depth",
+      zeroline = FALSE
+    ),
+    yaxis = list(
+      title = "Percent Damage"
+    ),
+    title = "Foster City vehicle damage during<br>100-year storm, by base sea level rise"
+  ) %>%
+  config(displayModeBar = F)
+
+fc_plot
 ```
 
 
