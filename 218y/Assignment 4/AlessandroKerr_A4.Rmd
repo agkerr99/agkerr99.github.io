@@ -540,7 +540,7 @@ fc_bldg_exposure <- readRDS("fc_bldg_exposure.RDS")
 ```
 
 
-Since the population data (from the Decennial Survey) is available at the block level, and the vehicle data (from the American Community Survey) is available at the census block group (CBG) level, the two were joined using geometry. By assuming a uniform distribution of population in each block, and an even vehicle distribution across population, the number of vehicles per building was calculated.
+Since the population data (from the Decennial Survey) is available at the block level, and the vehicle data (from the American Community Survey) is available at the census block group (CBG) level, the two were joined using geometry. By assuming a uniform distribution of population in each block, and an even vehicle distribution across population, the number of vehicles per building was calculated. It is assumed that the building footprints do not change over the study period. 
 
 ```{r}
 sm_cbg <- block_groups("CA","San Mateo", cb = F, progress_bar = F, year = 2019)
@@ -586,9 +586,20 @@ fc_block_veh_per_bldg <-
 
 
 ```
+
+The following is a plot that shows the calculated number of vehicles per building in the Foster City zipcode. Most of the results are fairly consistent, but there are a few outliers with larger numbers of vehicles per building. These are likely apartment complexes, but should still be considered as residential population. Moreover, since Foster City is not an extremely dense area, it is likely that these vehicles are parked on surface lots, or garages that are directly under the apartment. For this reason, it is likely that they would be affected by a flooding event, and will be kept in the analysis.
+
+```{r}
+fc_block_veh_per_bldg %>% st_as_sf() %>% mapview(zcol = "veh_per_bldg")
+
+```
+
+
 # Part 4: Vulnerability Data
 
 The next step in the analysis considers the relationship between hazard intensity and damage to the vehicles. This is accomplished by using depth-damage curves provided by the US Army Corps of Engineers. In particular, Economic Guidance Memorandum 09-04 was used to obtain the generic depth-damage curves. It was assumed that all vehicles were sedans for the purpose of this analysis. The depth-damage curve can be seen below.
+
+
 ```{r}
 vulnerability <- data.frame(
   depth_above_ground = c(0.5,1:10),
@@ -661,7 +672,9 @@ fc_veh_perc_damage_plot <-
     ))
 ```
 
-Another interesting plot can be made which relates percent vehicle damage to water depth in each SLR scenario:
+
+Another interesting plot can be made which relates percent vehicle damage to water depth in each SLR scenario that produced flooding in Foster City:
+
 
 ```{r}
 library(plotly)
@@ -703,7 +716,7 @@ fc_plot <-
     yaxis = list(
       title = "Percent Damage"
     ),
-    title = "Foster City vehicle damage during<br>100-year storm, by base sea level rise"
+    title = "Foster City Vehicle Damage During<br>100-year storm, by Base Sea Level Rise"
   ) %>%
   config(displayModeBar = F)
 
@@ -930,7 +943,7 @@ fc_bg_aal <-
   st_as_sf()
 ```
 
-The total AAL, normalized to an annual loss across buildings can be seen below:
+The total AAL, normalized to an annual loss across buildings at the census block group can be seen below:
 
 ```{r}
 aal_pal <- colorNumeric(
@@ -963,7 +976,7 @@ fc_bg_aal %>%
   )
 ```
 
-An important implication of vehicle flooding is for households that only have access to one or no vehicles.
+An important implication of vehicle flooding is for households that only have access to one or no vehicles -- the results for these statistics can be seen below:
 
 ```{r}
 fc_flood_risk <- fc_no_one_vehicle %>%
@@ -977,7 +990,8 @@ paste0("Percent of Households at Flood Risk in Foster City with One or No Vehicl
 
 
 
-This high number and percentage of households with one (or no) vehicle in Foster City is of particular importance. Having only one (or no) vehicle means lost access to daily activities (work, etc).  For households with no vehicles, they become stuck at home during flooding scenarios. In addition, public transit cannot run during these flooding events giving them no way to leave.
+The high number and percentage of households with one (or no) vehicle in Foster City is of particular importance. Having only one (or no) vehicle means these residents lose access to daily activities (work, essential shopping, etc). It is also likely that this number is underestimated due to the calculation methodology. Since buildings are equated to households, it may miss out on some of the individual households that live in apartment buildings and have one (or no) vehicles. For households with no vehicles, they may become stuck at home during flooding scenarios. In addition, public transit cannot run during these flooding events giving them no way to leave.
+
 
 
 
