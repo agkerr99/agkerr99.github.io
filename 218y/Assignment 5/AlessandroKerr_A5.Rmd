@@ -1,0 +1,567 @@
+---
+title: "AlessandroKerr_A5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(raster)
+library(stringr)
+library(tigris)
+library(tidyverse)
+library(readxl)
+library(censusapi)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(tidycensus)
+library(mapview)
+library(dplyr)
+library(ggrepel)
+library(ggplot2)
+library(jsonlite)
+library(stars)
+library(mapboxapi)
+library(tiff)
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F, message = F)
+
+```
+
+# Part 1: Geographic Equity
+
+```{r}
+library(jsonlite)
+
+pa_api <- "D0869B47-99B2-11EC-B9BF-42010A800003"
+
+json <- fromJSON(paste0(
+    "https://api.purpleair.com/v1/sensors?api_key=",
+    pa_api,
+    "&fields=name,location_type,latitude,longitude,pm2.5_1week,temperature,humidity,primary_id_a,primary_key_a,secondary_id_a,secondary_key_a,primary_id_b,primary_key_b,secondary_id_b,secondary_key_b"
+  ))
+
+all_sensors <- json %>% 
+  .$data %>% 
+  as.data.frame() %>% 
+  set_names(json$fields) %>% 
+  filter(
+    !is.na(longitude),
+    !is.na(latitude)
+  ) %>% 
+  st_as_sf(coords = c("longitude","latitude"), crs = 4326) %>% 
+  mutate(location_type = ifelse(
+    location_type == 0,
+    "outside",
+    "inside"
+  ))
+```
+
+```{r}
+smc_county <-
+  c(
+    "San Mateo"
+  )
+
+smc_counties <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME %in% smc_county) %>%
+  st_transform(4326)
+
+smc_sensors <-
+  all_sensors %>% 
+  .[smc_counties, ]
+```
+
+```{r}
+smc_sensors_clean <- smc_sensors %>% 
+  filter(
+    !is.na(pm2.5_1week),
+    !is.na(humidity)
+  ) %>% 
+  mutate(
+    PM25 = 0.524*as.numeric(pm2.5_1week) - 0.0852*as.numeric(humidity) + 5.72,
+    AQI = case_when(
+      PM25 <= 12 ~ 
+        paste(round(50/12*PM25), "Good"),
+      PM25 <= 35.4 ~ 
+        paste(round((100-51)/(35.4-12)*(PM25 - 12) + 51), "Moderate"),
+      PM25 <= 55.4 ~
+        paste(round((150-101)/(55.4-35.4)*(PM25 - 35.4) + 101), "Moderately Unhealthy"),
+      PM25 <= 150.4 ~
+        paste(round((200-151)/(150.4-55.4)*(PM25 - 55.4) + 151), "Unhealthy"),
+      PM25 <= 250.4 ~
+        paste(round((300-201)/(250.4-150.4)*(PM25 - 150.4) + 201), "Very Unhealthy"),
+      TRUE ~ 
+        paste(round((500-301)/(500.4-250.5)*(PM25 - 250.5) + 301), "Hazardous")
+    )
+  ) %>% 
+  separate(
+    AQI,
+    into = c("AQI","AQI_Cat"),
+    sep = " ",
+    extra = "merge"
+  ) %>% 
+  mutate(
+    AQI = as.numeric(AQI),
+    AQI_Cat = AQI_Cat %>% factor(levels = c("Good", "Moderate","Moderately Unhealthy","Unhealthy","Very Unhealthy","Hazardous"))
+  )
+```
+
+```{r}
+aqi_pal <- colorFactor(
+  palette = "RdYlGn",
+  reverse = T,
+  domain = smc_sensors_clean$AQI_Cat
+)
+
+smc_sensors_clean %>% 
+  filter(location_type == "outside") %>% 
+  leaflet() %>% 
+  addProviderTiles(provider = providers$CartoDB.Positron) %>% 
+  addCircleMarkers(
+    color = ~aqi_pal(AQI_Cat),
+    label = ~AQI_Cat,
+    radius = 5,
+    opacity = 0.75
+  ) %>% 
+  addLegend(
+    pal = aqi_pal,
+    values = ~AQI_Cat
+  )
+```
+
+
+```{r}
+select_smc_boundary <- places("CA", cb = T) %>% 
+  filter(NAME %in% c("Redwood City", "Menlo Park", "Burlingame", "Milbrae", "San Bruno", "San Carlos", "San Mateo")) %>% 
+  st_transform(4326)
+
+select_smc_sensors <- smc_sensors_clean %>% 
+  .[select_smc_boundary,]
+
+dates <- data.frame(c("2022-02-01%2000:08:00","2022-02-08%2000:08:00","2022-02-15%2000:08:00","2022-02-22%2000:08:00"),c("2022-02-08%2000:08:00","2022-02-15%2000:08:00","2022-02-22%2000:08:00","2022-03-01%2000:08:00"))
+
+colnames(dates)[1] <- "start"
+colnames(dates)[2] <- "end"
+
+
+```
+
+```{r}
+# 
+# smc_sensor_data <- 
+#   1:4 %>%
+#   map_dfr(function(x){
+#   1:nrow(select_smc_sensors) %>% 
+#   map_dfr(function(row){
+#   
+#   print(paste0(row,". ",select_smc_sensors[row,]$sensor_index))
+#   
+#   a1 <- read_csv(paste0(
+#     "https://api.thingspeak.com/channels/",
+#     select_smc_sensors[row,]$primary_id_a,
+#     "/feeds.csv?api_key=",
+#     select_smc_sensors[row,]$primary_key_a,
+#     "&average=1440&round=3&start=",dates[x,1],
+#     "&end=", dates[x,2], 
+#     "&timezone=America/Los_Angeles"
+#   ), show_col_types = F) %>% 
+#     set_names(c("created_at","PM1.0_CF_1_ug/m3_A","PM2.5_CF_1_ug/m3_A","PM10.0_CF_1_ug/m3_A","Uptime_Minutes_A","RSSI_dbm_A","Temperature_F_A","Humidity_%_A","PM2.5_CF_ATM_ug/m3_A"))
+#       
+#   a2 <- read_csv(paste0(
+#     "https://api.thingspeak.com/channels/",
+#     select_smc_sensors[row,]$secondary_id_a,
+#     "/feeds.csv?api_key=",
+#     select_smc_sensors[row,]$secondary_key_a,
+#     "&average=1440&round=3&start=",dates[x,1],
+#     "&end=", dates[x,2], 
+#     "&timezone=America/Los_Angeles"
+#   ), show_col_types = F) %>% 
+#     set_names(c("created_at","0.3um/dl_A","0.5um/dl_A","1.0um/dl_A","2.5um/dl_A","5.0um/dl_A","10.0um/dl_A","PM1.0_CF_ATM_ug/m3_A","PM10_CF_ATM_ug/m3_A"))
+#     
+#   b1 <- read_csv(paste0(
+#     "https://api.thingspeak.com/channels/",
+#     select_smc_sensors[row,]$primary_id_b,
+#     "/feeds.csv?api_key=",
+#     select_smc_sensors[row,]$primary_key_b,
+#     "&average=1440&round=3&start=",dates[x,1],
+#     "&end=", dates[x,2], 
+#     "&timezone=America/Los_Angeles"
+#   ), show_col_types = F) %>% 
+#     set_names(c("created_at","PM1.0_CF_1_ug/m3_B","PM2.5_CF_1_ug/m3_B","PM10.0_CF_1_ug/m3_B","HEAP_B","ADC0_voltage_B","Atmos_Pres_B","Not_Used_B","PM2.5_CF_ATM_ug/m3_B"))
+#   
+#   b2 <- read_csv(paste0(
+#     "https://api.thingspeak.com/channels/",
+#     select_smc_sensors[row,]$secondary_id_b,
+#     "/feeds.csv?api_key=",
+#     select_smc_sensors[row,]$secondary_key_b,
+#     "&average=1440&round=3&start=",dates[x,1],
+#     "&end=", dates[x,2], 
+#     "&timezone=America/Los_Angeles"
+#   ), show_col_types = F) %>% 
+#     set_names(c("created_at","0.3um/dl_B","0.5um/dl_B","1.0um/dl_B","2.5um/dl_B","5.0um/dl_B","10.0um/dl_B","PM1.0_CF_ATM_ug/m3_B","PM10_CF_ATM_ug/m3_B"))
+#   
+#   combined <- a1 %>% 
+#     left_join(a2, by = "created_at") %>% 
+#     left_join(b1, by = "created_at") %>% 
+#     left_join(b2, by = "created_at") %>% 
+#     transmute(
+#       date = as.Date(created_at),
+#       ID = as.numeric(select_smc_sensors[row,]$sensor_index),
+#       Location = select_smc_sensors[row,]$location_type,
+#       PM25 = 0.524*as.numeric(`PM2.5_CF_1_ug/m3_A`) - 0.0852*as.numeric(`Humidity_%_A`) + 5.72
+#     )
+# 
+# })
+#     
+#     })
+#saveRDS(smc_sensor_data, "smc_sensor_data.rds")
+
+smc_sensor_data <- readRDS("smc_sensor_data.rds")
+
+smc_sensor_data <- readRDS("smc_sensor_data.rds") %>%
+  st_as_sf() %>% 
+  st_transform(4326)
+
+smc_sensor_grouped <- smc_sensor_data %>%
+  group_by(ID, Location) %>% 
+  summarize(
+    PM25 = mean(PM25, na.rm = T)
+  )
+```
+```{r}
+select_smc_sensors$sensor_index <- as.numeric(select_smc_sensors$sensor_index)
+
+smc_sensor_outdoor <- smc_sensor_grouped %>%
+  filter(Location == "outside") 
+```
+
+```{r}
+smc_pm25_voronoi <-
+  smc_sensor_grouped %>%
+  filter(Location == "outside") %>% 
+  st_union() %>% 
+  st_voronoi() %>% 
+  st_cast() %>% 
+  st_as_sf() %>% 
+  st_intersection(.,st_union(smc_counties)) %>% 
+  st_join(smc_sensors_clean %>% filter(location_type == "outside"))
+
+ggplot(smc_pm25_voronoi) + geom_sf()  
+```
+
+```{r}
+smc_cbgs <- block_groups("CA","San Mateo", cb = T, progress_bar = F) %>% 
+  st_transform(4326)
+
+saveRDS(smc_cbgs, "smc_cbgs.rds")
+
+smc_pm25_voronoi_cbg <-
+  smc_pm25_voronoi %>% 
+  st_intersection(smc_cbgs) %>% 
+  st_make_valid() %>% 
+  mutate(
+    area = st_area(.) %>% as.numeric()
+  ) %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID) %>% 
+  summarize(
+    PM25 = weighted.mean(PM25, area, na.rm = T)
+  ) %>% 
+  left_join(smc_cbgs %>% dplyr::select(GEOID)) %>% 
+  st_as_sf()
+
+saveRDS(smc_pm25_voronoi_cbg, "smc_pm25_voronoi_cbg.rds")
+```
+
+# Part 2: Population Equity
+
+
+```{r}
+library(tidyverse)
+library(censusapi)
+
+Sys.setenv(CENSUS_KEY="c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+```
+
+```{r}
+#PurpleAir data for the last week:use smc_sensors_
+
+# smc_blocks <- blocks("CA","San Mateo") %>% 
+#   st_transform(4326)
+# 
+# saveRDS(smc_blocks, "smc_blocks.rds")
+
+smc_pm25_voronoi2 <-
+  smc_sensors_clean %>%
+  filter(location_type == "inside") %>%
+  st_union() %>%
+  st_voronoi() %>%
+  st_cast() %>%
+  st_as_sf() %>%
+  st_intersection(.,st_union(smc_counties)) %>%
+  st_join(smc_sensors_clean %>% filter(location_type == "inside"))
+# 
+# 
+# 
+# smc_pm25_voronoi_block <-
+#   smc_pm25_voronoi2 %>% 
+#   st_intersection(smc_blocks)
+# 
+# saveRDS(smc_pm25_voronoi_block, "smc_pm25_voronoi_block.rds")
+
+smc_blocks <- readRDS("smc_blocks.rds")
+smc_pm25_voronoi_block <- readRDS("smc_pm25_voronoi_block.rds")
+
+smc_pm25_voronoi_block2 <- smc_pm25_voronoi_block %>%
+  st_make_valid() %>% 
+  mutate(
+    area = st_area(.) %>% as.numeric()
+  ) %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID10) %>% 
+  summarize(
+    PM25 = weighted.mean(PM25, area, na.rm = T)
+  ) %>% 
+  left_join(smc_blocks %>% dplyr::select(GEOID10)) %>% 
+  st_as_sf()
+
+```
+
+
+```{r}
+#Repeat for cbg
+
+smc_cbgs <- readRDS("smc_cbgs.rds")
+
+smc_pm25_voronoi_block3 <-
+  smc_pm25_voronoi2 %>%
+  st_intersection(smc_cbgs) %>%
+  st_make_valid() %>% 
+  mutate(
+    area = st_area(.) %>% as.numeric()
+  ) %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID) %>% 
+  summarize(
+    PM25 = weighted.mean(PM25, area, na.rm = T)
+  ) %>% 
+  left_join(smc_cbgs %>% dplyr::select(GEOID)) %>% 
+  st_as_sf()
+
+```
+
+```{r}
+smc_income <-
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2019,
+    region = "block group:*",
+    regionin = "state:06+county:081",
+    vars = "group(B19001)"
+  ) %>%
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_5yr %>%
+      select(name, label)
+  ) %>%
+  select(-name) %>%
+  separate(
+    label,
+    into = c(NA,NA,"income"),
+    sep = "!!"
+  ) %>%
+  filter(!is.na(income)) %>%
+  mutate(
+    state = "06",
+    cbg = paste0(state,county,tract,block_group)
+  ) %>%
+  group_by(cbg, income) %>%
+  summarise(estimate=sum(estimate))
+```
+
+
+```{r}
+
+smc_income_pm25_mean <- mean(smc_pm25_voronoi_block3$PM25)
+
+smc_income_pm25 <- smc_income %>%
+  left_join(smc_pm25_voronoi_block3, by = c("cbg" = "GEOID")) %>%
+  filter(!is.na(PM25))
+
+smc_income_pm25$quartile <- ntile(smc_income_pm25$PM25, 4)
+
+smc_income_pm25_final <- smc_income_pm25 %>%
+  mutate(quartile = case_when(
+    quartile == 1 ~ paste0(round(quantile(smc_income_pm25$PM25)[1],2), " to ", round(quantile(smc_income_pm25$PM25)[2],2)),
+    quartile == 2 ~ paste0(round(quantile(smc_income_pm25$PM25)[2],2), " to ", round(quantile(smc_income_pm25$PM25)[3],2)),
+    quartile == 3 ~ paste0(round(quantile(smc_income_pm25$PM25)[3],2), " to ", round(quantile(smc_income_pm25$PM25)[4],2)),
+    quartile == 4 ~ paste0(round(quantile(smc_income_pm25$PM25)[4],2), " to ", round(quantile(smc_income_pm25$PM25)[5],2)),
+  ))
+  
+income_levels <- c("Less than $10,000","$10,000 to $14,999","$15,000 to $19,999", "$20,000 to $24,999", "$25,000 to $29,999", "$30,000 to $34,999", "$35,000 to $39,999", "$40,000 to $44,999", "$45,000 to $49,999", "$50,000 to $59,999", "$60,000 to $74,999", "$75,000 to $99,999", "$100,000 to $124,999", "$125,000 to $149,999", "$150,000 to $199,999", "$200,000 or more") 
+  
+quartile_levels <- c("2.17 to 4.71", "4.71 to 5.39", "5.39 to 6.31", "6.31 to 23.08")
+
+smc_income_pm25_plot <- smc_income_pm25_final %>%
+  group_by(income, quartile) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = income %>% factor(levels = rev(income_levels)),
+      y = estimate,
+      fill = quartile %>% factor(levels = rev(quartile_levels))
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "Household income",
+    y = "Proportion of households",
+    title = "San Mateo County Air Quality by Income",
+    fill = "PM2.5 Quartile Range"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )  +
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+
+
+smc_income_pm25_plot
+```
+
+```{r}
+dec_vars_2020 <-
+  listCensusMetadata(
+    name = "2020/dec/pl",
+    type = "variables"
+  )
+
+smc_pop_race_2020 <-
+  getCensus(
+    name = "dec/pl",
+    vintage = 2020,
+    region = "block:*", 
+    regionin = "state:06+county:081",
+    vars = "group(P1)"
+  ) %>% 
+  mutate(
+    block =
+      paste0(state,county,tract,block)
+  ) %>% 
+  select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>% 
+  pivot_longer(
+    ends_with("N"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    dec_vars_2020 %>% 
+      select(name, label)
+  ) %>% 
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"category1","category2"),
+    sep = "!!"
+  ) %>%
+  mutate(
+    race = case_when(
+      category1 == "Population of two or more races:" & is.na(category2) ~ "Two or more races",
+      category1 == "Population of two or more races:" ~ "",
+      !is.na(category2) ~ category2,
+      TRUE ~ ""
+    )
+  ) %>%
+  filter(race != "")
+  
+```
+
+```{r}
+smc_race_pm25 <- smc_pop_race_2020 %>%
+  left_join(smc_pm25_voronoi_block2, by = c("block" = "GEOID10")) %>% 
+  mutate(
+    PM2.5_tier =
+      case_when(
+        PM25 < 4 ~ "<4",
+        PM25 < 5 ~ "4-5",
+        PM25 < 6 ~ "5-6",
+        PM25 < 7 ~ "6-7",
+        PM25 < 8 ~ "7-8",
+        PM25 > 8 ~ "8+",
+        TRUE ~ "NA",
+        
+      ) 
+  ) %>% 
+  group_by(race, PM2.5_tier) %>% 
+  summarize(estimate = sum(estimate, na.rm = T)) %>%
+  filter(PM2.5_tier != "NA")
+```
+
+```{r}
+census_race_categories <- 
+  c(
+    "White Alone",
+    "Black or African American",
+    "American Indian and Alaska Native Alone",
+    "Asian Alone",
+    "Native Hawaiian and Other Pacific Islander Alone",
+    "Some Other Race Alone",
+    "Two or More Races"
+  )
+
+smc_pm25_race_fill <-
+  smc_race_pm25 %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = PM2.5_tier %>% factor(levels = (c("<4","4-5","5-6","6-7","7-8","8+"))),
+      y = estimate,
+      fill = race
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "PM2.5",
+    y = "Proportion of households",
+    title = "San Mateo County PM2.5 exposure by race",
+    subtitle = "Last Week of February 2022 PM2.5 Exposure",
+    fill = "Race"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  ) +
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+
+smc_pm25_race_fill
+
+saveRDS(smc_pm25_race_fill, "smc_pm25_race_fill.rds")
+saveRDS(smc_income_pm25_plot, "smc_income_pm25_plot.rds")
+```
+
