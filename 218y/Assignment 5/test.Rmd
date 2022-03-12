@@ -1,0 +1,65 @@
+---
+title: "Dashboard Demo"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(plotly)
+library(tigris)
+library(dplyr)
+library(shiny)
+
+
+
+smc_income_pm25_plot <- readRDS("smc_income_pm25_plot.rds")
+smc_income_pm25 <- readRDS("smc_income_pm25.rds")
+equity_choices <- data.frame(choices = c("Race", "Income"))
+income_levels <- c("Less than $10,000","$10,000 to $14,999","$15,000 to $19,999", "$20,000 to $24,999", "$25,000 to $29,999", "$30,000 to $34,999", "$35,000 to $39,999", "$40,000 to $44,999", "$45,000 to $49,999", "$50,000 to $59,999", "$60,000 to $74,999", "$75,000 to $99,999", "$100,000 to $124,999", "$125,000 to $149,999", "$150,000 to $199,999", "$200,000 or more") 
+quartile_levels <- c(paste0(round(quantile(smc_income_pm25$PM25)[1],2), " to ", round(quantile(smc_income_pm25$PM25)[2],2)),paste0(round(quantile(smc_income_pm25$PM25)[2],2), " to ", round(quantile(smc_income_pm25$PM25)[3],2)), paste0(round(quantile(smc_income_pm25$PM25)[3],2), " to ", round(quantile(smc_income_pm25$PM25)[4],2)), paste0(round(quantile(smc_income_pm25$PM25)[4],2), " to ", round(quantile(smc_income_pm25$PM25)[5],2)))
+
+
+```
+
+Inputs {.sidebar}
+-------------------------------------
+
+  
+```{r}
+selectInput(
+  inputId = "analysis", 
+  label = "EquityPlot:",
+  choices = equity_choices$choices,
+  selected = "Income"
+)
+```
+
+Column
+-------------------------------------
+
+### Plot
+
+```{r}
+plotlyOutput("plot")
+```
+
+```{r, context = "server"}
+observeEvent(input$analysis, {
+  if(input$analysis == "Income")
+  {chart <- smc_income_pm25_plot}
+
+
+  
+  output$plot <- renderPlotly({
+    chart %>% 
+      ggplotly() %>% 
+      config(displayModeBar = F)
+  })
+  
+})

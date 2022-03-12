@@ -5,9 +5,9 @@ account: agkerr
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 5783726
-bundleId: 5643854
+bundleId: 5673437
 url: https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard1/
-when: 1646425941.96121
-lastSyncTime: 1646425941.96122
+when: 1647029480.58273
+lastSyncTime: 1647029480.58274
 asMultiple: FALSE
 asStatic: FALSE

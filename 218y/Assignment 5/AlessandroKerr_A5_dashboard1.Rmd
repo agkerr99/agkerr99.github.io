@@ -8,6 +8,7 @@ output:
 
 ```{r global, include=FALSE}
 library(flexdashboard)
+library(shiny)
 library(tidyverse)
 library(leaflet)
 library(sf)

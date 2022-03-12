@@ -1,5 +1,7 @@
 ---
 title: "AlessandroKerr_A5"
+author: "Alessandro Kerr"
+date: "3/15/2022"
 output: html_document
 ---
 
@@ -28,18 +30,27 @@ knitr::opts_chunk$set(warning = F, message = F)
 
 ```
 
+The purpose of this assignment is to assess the equity implications of air quality in San Mateo County (SMC). This study will use PurpleAir data as the basis for analysis. Geographic, population, and data equity will be reviewed, and will be displayed through interactive dashboards. 
+
+
 # Part 1: Geographic Equity
+
+The first part of this study will review geographic equity for PurpleAir sensors in SMC for 4 weeks in February 2022. First, the sensor location data for SMC was obtained from the PurpleAir website. After filtering these down the SMC, PM2.5 and AQI was calculated for each sensor. The distribution of sensors and their AQI classification based on their PM2.5 can be seen below:
 
 ```{r}
 library(jsonlite)
 
 pa_api <- "D0869B47-99B2-11EC-B9BF-42010A800003"
 
-json <- fromJSON(paste0(
-    "https://api.purpleair.com/v1/sensors?api_key=",
-    pa_api,
-    "&fields=name,location_type,latitude,longitude,pm2.5_1week,temperature,humidity,primary_id_a,primary_key_a,secondary_id_a,secondary_key_a,primary_id_b,primary_key_b,secondary_id_b,secondary_key_b"
-  ))
+# json <- fromJSON(paste0(
+#     "https://api.purpleair.com/v1/sensors?api_key=",
+#     pa_api,
+#     "&fields=name,location_type,latitude,longitude,pm2.5_1week,temperature,humidity,primary_id_a,primary_key_a,secondary_id_a,secondary_key_a,primary_id_b,primary_key_b,secondary_id_b,secondary_key_b"
+#   ))
+# 
+# saveRDS(json, "json.rds")
+
+json <- readRDS("json.rds")
 
 all_sensors <- json %>% 
   .$data %>% 
@@ -71,6 +82,8 @@ smc_counties <-
 smc_sensors <-
   all_sensors %>% 
   .[smc_counties, ]
+
+
 ```
 
 ```{r}
@@ -129,11 +142,14 @@ smc_sensors_clean %>%
     pal = aqi_pal,
     values = ~AQI_Cat
   )
+
+saveRDS(smc_sensors_clean, "smc_sensors_clean.rds")
 ```
 
+ From here, the ThingSpeak data was collected for February 2022. Due to the large computational intensity of doing the entire SMC, Redwood City, Menlo Park, Burlingame, Mibrae, San Bruno, San Carlos, and San Mateo were selected and make up a bulk of the county. Given the sensor locations, it is important to know the boundaries where air quality data from that sensor should be used. This was accomplished using the voronoi method, which finds the boundary where that zone is closest to each sensor.One key assumption is that only outdoor sensors are applicable, as indoor sensors could be more localised air quality. In addition, an assumption with the effective sensor area is that air can travel freely, which more so occurs outdoors. The voronoi boundaries can be seen below:
 
 ```{r}
-select_smc_boundary <- places("CA", cb = T) %>% 
+select_smc_boundary <- places("CA", cb = T, progress_bar = F) %>% 
   filter(NAME %in% c("Redwood City", "Menlo Park", "Burlingame", "Milbrae", "San Bruno", "San Carlos", "San Mateo")) %>% 
   st_transform(4326)
 
@@ -230,6 +246,7 @@ smc_sensor_grouped <- smc_sensor_data %>%
     PM25 = mean(PM25, na.rm = T)
   )
 ```
+
 ```{r}
 select_smc_sensors$sensor_index <- as.numeric(select_smc_sensors$sensor_index)
 
@@ -250,6 +267,10 @@ smc_pm25_voronoi <-
 
 ggplot(smc_pm25_voronoi) + geom_sf()  
 ```
+
+Next, the census block group (CGB) air quality data was calculated. This was done by using the voronoi boundaries and finding the spatial intersection with the CBGs. Ultimately, this uses a weighted mean to calculate the PM2.5 for each CBG. In order to create a more interactive interface, a shiny dashboard was used to display this data. This allows the user to select between different Jurisdictions, and see the daily air quality data, and see the CBG distribution on a map. See the dashboard through the following link: 
+
+https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard1/
 
 ```{r}
 smc_cbgs <- block_groups("CA","San Mateo", cb = T, progress_bar = F) %>% 
@@ -276,6 +297,12 @@ saveRDS(smc_pm25_voronoi_cbg, "smc_pm25_voronoi_cbg.rds")
 ```
 
 # Part 2: Population Equity
+
+The next part of this study will focus on a population equity analysis. In particular, it will look at income and race data compared to the PM2.5 levels at the CBG and block level to determine any under- or over-represented populations. For the income analysis, it will utilise ACS income data at the CBG level. For simplicity, only the past week of PurpleAir data will be used. An important assumption is that while the indoor sensors used in this analysis are specific to a household, but it is assumed it applies to each house in that CBG and a consistent race distribution. On the other hand, the race analysis will use Decennial data at the block level to produce an equity analysis chart against PM2.5 levels. 
+
+First, the voronoi boundaries had to be determined at the CBG and block level so that the air quality data could be aggregated to those levels. Once again, spatial intersection was used to determine the PM2.5 levels for each geographic boundary. The respective plots for the income and race equity analyses can be seen below. However, the following link also uses an interactive dashboard to display the data. 
+
+ https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard2/
 
 
 ```{r}
@@ -409,11 +436,34 @@ smc_income_pm25_final <- smc_income_pm25 %>%
     quartile == 2 ~ paste0(round(quantile(smc_income_pm25$PM25)[2],2), " to ", round(quantile(smc_income_pm25$PM25)[3],2)),
     quartile == 3 ~ paste0(round(quantile(smc_income_pm25$PM25)[3],2), " to ", round(quantile(smc_income_pm25$PM25)[4],2)),
     quartile == 4 ~ paste0(round(quantile(smc_income_pm25$PM25)[4],2), " to ", round(quantile(smc_income_pm25$PM25)[5],2)),
-  ))
+  )) %>%
+  mutate(income = 
+           case_when(
+        income == "Less than $10,000" ~ "Less than $10,000",
+        income == "$10,000 to $14,999" ~ "$10,000 to 14,999",
+        income == "$15,000 to $19,999" ~ "$15,000 to 19,999",
+        income == "$20,000 to $24,999" ~ "$20,000 to 24,999",
+        income == "$25,000 to $29,999" ~ "$25,000 to 29,999",
+        income == "$30,000 to $34,999" ~ "$30,000 to 34,999",
+        income == "$35,000 to $39,999" ~ "$35,000 to 39,999",
+        income == "$40,000 to $44,999" ~ "$40,000 to 44,999",
+        income == "$45,000 to $49,999" ~ "$45,000 to 49,999",
+        income == "$50,000 to $59,999" ~ "$50,000 to 59,999",
+        income == "$60,000 to $74,999" ~ "$60,000 to 74,999",
+        income == "$75,000 to $99,999" ~ "$75,000 to 99,999",
+        income == "$100,000 to $124,999" ~ "$100,000 to 124,999",
+        income == "$125,000 to $149,999" ~ "$125,000 to 149,999",
+        income == "$150,000 to $199,999" ~ "$150,000 to 199,999",
+        income == "$200,000 or more" ~ "$200,000 or more"
+        ))
   
-income_levels <- c("Less than $10,000","$10,000 to $14,999","$15,000 to $19,999", "$20,000 to $24,999", "$25,000 to $29,999", "$30,000 to $34,999", "$35,000 to $39,999", "$40,000 to $44,999", "$45,000 to $49,999", "$50,000 to $59,999", "$60,000 to $74,999", "$75,000 to $99,999", "$100,000 to $124,999", "$125,000 to $149,999", "$150,000 to $199,999", "$200,000 or more") 
   
-quartile_levels <- c("2.17 to 4.71", "4.71 to 5.39", "5.39 to 6.31", "6.31 to 23.08")
+saveRDS(smc_income_pm25_final, "smc_income_pm25_final.rds")
+saveRDS(smc_income_pm25, "smc_income_pm25.rds")
+
+income_levels <- c("Less than $10,000","$10,000 to 14,999","$15,000 to 19,999", "$20,000 to 24,999", "$25,000 to 29,999", "$30,000 to 34,999", "$35,000 to 39,999", "$40,000 to 44,999", "$45,000 to 49,999", "$50,000 to 59,999", "$60,000 to 74,999", "$75,000 to 99,999", "$100,000 to 124,999", "$125,000 to 149,999", "$150,000 to 199,999", "$200,000 or more") 
+  
+quartile_levels <- c(paste0(round(quantile(smc_income_pm25$PM25)[1],2), " to ", round(quantile(smc_income_pm25$PM25)[2],2)),paste0(round(quantile(smc_income_pm25$PM25)[2],2), " to ", round(quantile(smc_income_pm25$PM25)[3],2)), paste0(round(quantile(smc_income_pm25$PM25)[3],2), " to ", round(quantile(smc_income_pm25$PM25)[4],2)), paste0(round(quantile(smc_income_pm25$PM25)[4],2), " to ", round(quantile(smc_income_pm25$PM25)[5],2)))
 
 smc_income_pm25_plot <- smc_income_pm25_final %>%
   group_by(income, quartile) %>% 
@@ -421,9 +471,9 @@ smc_income_pm25_plot <- smc_income_pm25_final %>%
   ggplot() +
   geom_bar(
     aes(
-      x = income %>% factor(levels = rev(income_levels)),
+      x = income %>% factor(levels = rev(c("Less than $10,000","$10,000 to 14,999","$15,000 to 19,999", "$20,000 to 24,999", "$25,000 to 29,999", "$30,000 to 34,999", "$35,000 to 39,999", "$40,000 to 44,999", "$45,000 to 49,999", "$50,000 to 59,999", "$60,000 to 74,999", "$75,000 to 99,999", "$100,000 to 124,999", "$125,000 to 149,999", "$150,000 to 199,999", "$200,000 or more"))),
       y = estimate,
-      fill = quartile %>% factor(levels = rev(quartile_levels))
+      fill = quartile %>% factor(levels = rev(c(paste0(round(quantile(smc_income_pm25$PM25)[1],2), " to ", round(quantile(smc_income_pm25$PM25)[2],2)),paste0(round(quantile(smc_income_pm25$PM25)[2],2), " to ", round(quantile(smc_income_pm25$PM25)[3],2)), paste0(round(quantile(smc_income_pm25$PM25)[3],2), " to ", round(quantile(smc_income_pm25$PM25)[4],2)), paste0(round(quantile(smc_income_pm25$PM25)[4],2), " to ", round(quantile(smc_income_pm25$PM25)[5],2)))))
     ),
     stat = "identity",
     position = "fill"
@@ -515,6 +565,8 @@ smc_race_pm25 <- smc_pop_race_2020 %>%
   group_by(race, PM2.5_tier) %>% 
   summarize(estimate = sum(estimate, na.rm = T)) %>%
   filter(PM2.5_tier != "NA")
+
+saveRDS(smc_race_pm25, "smc_race_pm25.rds")
 ```
 
 ```{r}
@@ -563,5 +615,133 @@ smc_pm25_race_fill
 
 saveRDS(smc_pm25_race_fill, "smc_pm25_race_fill.rds")
 saveRDS(smc_income_pm25_plot, "smc_income_pm25_plot.rds")
+```
+
+```{r}
+smc_pm25_race_fill <- readRDS("smc_pm25_race_fill.rds")
+smc_income_pm25_plot <- readRDS("smc_income_pm25_plot.rds")
+```
+
+# Part 3: Data Equity
+
+The last part of this analysis will consider data equity, and if certain areas are underrepresented in terms of sensor locations. Ultimately, a weighted score will be given to each CBG based on racial, population density, and coverage area.  It was assumed that each sensor can be provide air quality data for a 400m (1/4 mile) diameter, and only outdoor sensors are applicable to this (so that air can travel freely in a 400m circle). The census boundaries, sensor locations, and coverage area can be seen in the maps below. From here, the percent area coverage, population density, and racial distribution was calculated for each CBG. Then, the score can be determined for each CBG with user-input on a dashboard. Given the lowest score, it recommends a location to place a new sensor. See the dashboard through the following link:
+
+ https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard3/
+
+```{r}
+mapview(smc_sensors) + mapview(smc_cbgs)
+
+#change to outdoors, factors of 
+
+smc_sensors_buffer <- smc_sensors %>%
+  st_buffer(dist = 400) %>%
+  filter(location_type == "outside") #filter to outdoors and re-run overlap
+
+# cbg_overlap <-  smc_sensors_buffer %>%
+#   st_intersection(smc_cbgs) %>%
+#   st_make_valid() %>%
+#   mutate(
+#     area = st_area(.) %>% as.numeric()
+#   )
+# saveRDS(cbg_overlap, "cbg_overlap.rds")
+cbg_overlap <- readRDS("cbg_overlap.rds")
+
+cbg_areas <- smc_cbgs %>%
+  st_make_valid() %>%
+  mutate(cbg_area = st_area(.)) %>%
+  select(GEOID, cbg_area) %>%
+  st_drop_geometry()
+
+attributes(cbg_areas$cbg_area) = NULL
+
+options(scipen = 100)
+
+cbg_sensor_area <- cbg_overlap %>%
+  group_by(GEOID) %>%
+  summarize(area = sum(area)) %>%
+  left_join(cbg_areas) %>%
+  mutate(perc_area = area/cbg_area) # if this is greater than 1, means multiple sensors reach it
+
+# get pop and % key races for each cbg then create formula 
+
+#then sort them based on lowest scores and plot centroids of CBGS to estimate where to put sensors based on this
+
+mapview(cbg_sensor_area) + mapview(smc_cbgs)
+
+# Do we wanna just count total area coverred by sensors in this calc? Then take lowest scored cbgs and place at the centroid of that cbg? Maybe get % of area of each cbg covered and that % gets multiplied by the weighting in the dashboard????
+
+
+```
+
+```{r}
+smc_pop_race_2020_cbg <-
+  getCensus(
+    name = "dec/pl",
+    vintage = 2020,
+    region = "block group:*", 
+    regionin = "state:06+county:081",
+    vars = "group(P1)"
+  ) %>% 
+  mutate(
+    cbg =
+      paste0(state,county,tract,block_group)
+  ) %>% 
+  select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>% 
+  pivot_longer(
+    ends_with("N"),
+    names_to = "name",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    dec_vars_2020 %>% 
+      select(name, label)
+  ) %>% 
+  select(-name) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"category1","category2"),
+    sep = "!!"
+  ) %>%
+  mutate(
+    race = case_when(
+      category1 == "Population of two or more races:" & is.na(category2) ~ "Two or more races",
+      category1 == "Population of two or more races:" ~ "",
+      !is.na(category2) ~ category2,
+      TRUE ~ ""
+    )
+  ) %>%
+  filter(race != "") %>%
+  select(-category1, -category2) %>%
+  pivot_wider(
+    names_from = "race",
+    values_from = "estimate"
+  ) %>%
+  rename("GEOID" = "cbg") 
+
+smc_pop_race_2020_cbg$total <- rowSums(smc_pop_race_2020_cbg[3:8], na.rm=TRUE)
+
+## could calc pop density, and race breakdown and use those as weights.
+```
+
+```{r}
+cbg_sensor_combined <- cbg_sensor_area %>%
+  left_join(smc_pop_race_2020_cbg) %>%
+  filter(!is.na(total)) %>%
+  mutate(density = total/cbg_area*2.59e+6) %>% #people per sq.mile
+  mutate(
+    perc_white = `White alone`/total,
+    perc_black = `Black or African American alone`/total,
+    perc_asian = `Asian alone`/total,
+    perc_native = `American Indian and Alaska Native alone`/total,
+    perc_other = (`Some Other Race alone` + `Two or more races`)/total,
+  ) %>%
+  select(perc_area, perc_white, perc_black, perc_asian, perc_native, perc_other, density, GEOID) %>%
+  mutate(perc_density = density/max(density)) %>%
+  st_drop_geometry() %>%
+  left_join(smc_cbgs %>% select(GEOID)) %>%
+  st_as_sf()
+  
+
+saveRDS(cbg_sensor_combined, "cbg_sensor_combined.rds")
 ```
 
