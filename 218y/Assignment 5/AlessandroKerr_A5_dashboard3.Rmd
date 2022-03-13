@@ -35,64 +35,64 @@ Inputs {.sidebar}
 sliderInput(
   inputId = "white",
   label = "Percent White Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0,
-  step = 0.1
+  step = 0.2
 )
 
 sliderInput(
   inputId = "black",
   label = "Percent Black Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0,
-  step = 0.1
+  step = 0.2
 )
 
 sliderInput(
   inputId = "asian",
   label = "Percent Asian Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0,
-  step = 0.1
+  step = 0.2
 )
 
 sliderInput(
   inputId = "native",
   label = "Percent Native Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0,
-  step = 0.1
+  step = 0.2
 )
 
 sliderInput(
   inputId = "other",
   label = "Percent Other Race Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0,
-  step = 0.1
+  step = 0.2
 )
 
 sliderInput(
   inputId = "perc_density",
   label = "Census Block Group Density Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0,
-  step = 0.1
+  step = 0.2
 )
 
 sliderInput(
   inputId = "percent",
   label = "Percent Area Covered Weighting:",
-  min = 0,
+  min = -1,
   max = 1,
   value = 0.3,
-  step = 0.1
+  step = 0.2
 )
 ```
 

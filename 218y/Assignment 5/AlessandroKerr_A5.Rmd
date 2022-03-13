@@ -30,12 +30,12 @@ knitr::opts_chunk$set(warning = F, message = F)
 
 ```
 
-The purpose of this assignment is to assess the equity implications of air quality in San Mateo County (SMC). This study will use PurpleAir data as the basis for analysis. Geographic, population, and data equity will be reviewed, and will be displayed through interactive dashboards. 
+The purpose of this assignment is to assess the equity implications of air quality in San Mateo County (SMC), using PurpleAir data as the basis for analysis. Geographic, population, and data equity will be reviewed, and will be displayed through interactive dashboards. 
 
 
 # Part 1: Geographic Equity
 
-The first part of this study will review geographic equity for PurpleAir sensors in SMC for 4 weeks in February 2022. First, the sensor location data for SMC was obtained from the PurpleAir website. After filtering these down the SMC, PM2.5 and AQI was calculated for each sensor. The distribution of sensors and their AQI classification based on their PM2.5 can be seen below:
+The first part of this study reviewed geographic equity for PurpleAir sensors in SMC for 4 weeks in February 2022. First, the sensor location data for SMC was obtained from the PurpleAir website. After filtering these down the SMC, PM2.5 and AQI was calculated for each sensor. The distribution of sensors and their AQI classification based on their PM2.5 can be seen below:
 
 ```{r}
 library(jsonlite)
@@ -146,7 +146,7 @@ smc_sensors_clean %>%
 saveRDS(smc_sensors_clean, "smc_sensors_clean.rds")
 ```
 
- From here, the ThingSpeak data was collected for February 2022. Due to the large computational intensity of doing the entire SMC, Redwood City, Menlo Park, Burlingame, Mibrae, San Bruno, San Carlos, and San Mateo were selected and make up a bulk of the county. Given the sensor locations, it is important to know the boundaries where air quality data from that sensor should be used. This was accomplished using the voronoi method, which finds the boundary where that zone is closest to each sensor.One key assumption is that only outdoor sensors are applicable, as indoor sensors could be more localised air quality. In addition, an assumption with the effective sensor area is that air can travel freely, which more so occurs outdoors. The voronoi boundaries can be seen below:
+From here, the ThingSpeak data was collected for February 2022. Due to the large computational intensity of doing all of SMC, Redwood City, Menlo Park, Burlingame, Mibrae, San Bruno, San Carlos, and San Mateo were selected and make up a bulk of the county. Given the sensor locations, it is important to know the extents where air quality data from each sensor should be used. This was accomplished using the voronoi method, which finds the boundaries that are closest to each sensor. One key assumption is that only outdoor sensors are applicable, as indoor sensors provide more localised air quality. In addition, an assumption with the voronoi sensor area is that air can travel freely, which more so occurs outdoors. The voronoi boundaries can be seen below:
 
 ```{r}
 select_smc_boundary <- places("CA", cb = T, progress_bar = F) %>% 
@@ -268,9 +268,11 @@ smc_pm25_voronoi <-
 ggplot(smc_pm25_voronoi) + geom_sf()  
 ```
 
-Next, the census block group (CGB) air quality data was calculated. This was done by using the voronoi boundaries and finding the spatial intersection with the CBGs. Ultimately, this uses a weighted mean to calculate the PM2.5 for each CBG. In order to create a more interactive interface, a shiny dashboard was used to display this data. This allows the user to select between different Jurisdictions, and see the daily air quality data, and see the CBG distribution on a map. See the dashboard through the following link: 
+Next, the air quality data was calculated for each census block group (CGB). This was done by using the voronoi boundaries and finding the spatial intersection with the CBGs. Then, a weighted mean was used to calculate the PM2.5 for each CBG based on the overlapping voronoi boundaries. In order to create an interactive interface, a shiny dashboard was used to display this data. This allows the user to select between different jurisdictions to see the daily air quality data, and see the CBG distribution on a map. See the dashboard through the following link: 
 
 https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard1/
+
+Based on the dashboard, a preliminary inspection reveals that the Redwood City and Menlo Park have worse air quality than the north of SMC. Also, it should be noted that in some jurisdictions the data is not complete for the daily air quality. 
 
 ```{r}
 smc_cbgs <- block_groups("CA","San Mateo", cb = T, progress_bar = F) %>% 
@@ -298,11 +300,13 @@ saveRDS(smc_pm25_voronoi_cbg, "smc_pm25_voronoi_cbg.rds")
 
 # Part 2: Population Equity
 
-The next part of this study will focus on a population equity analysis. In particular, it will look at income and race data compared to the PM2.5 levels at the CBG and block level to determine any under- or over-represented populations. For the income analysis, it will utilise ACS income data at the CBG level. For simplicity, only the past week of PurpleAir data will be used. An important assumption is that while the indoor sensors used in this analysis are specific to a household, but it is assumed it applies to each house in that CBG and a consistent race distribution. On the other hand, the race analysis will use Decennial data at the block level to produce an equity analysis chart against PM2.5 levels. 
+The next part of this study focused on a population equity analysis. In particular, income and race data was  compared to the PM2.5 levels at the CBG and block level to determine any under- or over-represented populations. For the income analysis, ACS income data was used at the CBG level. For simplicity, only the past week of PurpleAir data was used. An important assumption is that while the indoor sensors used in this analysis are specific to a household, but it was assumed they applied to each house in that CBG with a consistent race distribution. On the other hand, the race analysis used Decennial data at the block level to compare against PM2.5 levels. 
 
-First, the voronoi boundaries had to be determined at the CBG and block level so that the air quality data could be aggregated to those levels. Once again, spatial intersection was used to determine the PM2.5 levels for each geographic boundary. The respective plots for the income and race equity analyses can be seen below. However, the following link also uses an interactive dashboard to display the data. 
+First, the voronoi boundaries had to be determined at the CBG and block level so that the air quality data could be aggregated to those levels. Once again, the voronoi method and spatial intersectionw was used to determine the PM2.5 levels for each geographic boundary. The respective plots for the income and race equity analyses can be seen below. However, the following link also uses an interactive dashboard to display the data. 
 
  https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard2/
+ 
+A preliminary analysis of the plots reveal a general trend of lower income brackets having higher PM2.5 levels. This can be seen in particular through the green and blue sections of the chart, but it is not a clear trend in all PM2.5 levels. On the other hand, the race versus PM2.5 plot shows clear over-representation of some races in higher PM2.5 brackets. For example, asian populations have a higher representation in higher PM2.5 levels, whereas white population typically have higher representation in lower PM2.5 brackets. 
 
 
 ```{r}
@@ -624,14 +628,16 @@ smc_income_pm25_plot <- readRDS("smc_income_pm25_plot.rds")
 
 # Part 3: Data Equity
 
-The last part of this analysis will consider data equity, and if certain areas are underrepresented in terms of sensor locations. Ultimately, a weighted score will be given to each CBG based on racial, population density, and coverage area.  It was assumed that each sensor can be provide air quality data for a 400m (1/4 mile) diameter, and only outdoor sensors are applicable to this (so that air can travel freely in a 400m circle). The census boundaries, sensor locations, and coverage area can be seen in the maps below. From here, the percent area coverage, population density, and racial distribution was calculated for each CBG. Then, the score can be determined for each CBG with user-input on a dashboard. Given the lowest score, it recommends a location to place a new sensor. See the dashboard through the following link:
+The last part of this analysis will consider data equity, and will explore whether certain areas are underrepresented in terms of sensor locations. Ultimately, a weighted sensor score will be given to each CBG based on racial, population density, and sensor coverage area.  It was assumed that each sensor can be provide air quality data for a 400m (1/4 mile) diameter, and only outdoor sensors are applicable to this (so that air can travel freely in a 400m circle). The census boundaries, sensor locations, and coverage area can be seen in the maps below. From here, the percent area coverage, population density, and racial distribution was calculated for each CBG. Then, the score can be determined (with user input for the weights) for each CBG. Given the lowest score, it recommends a new location to place a new sensor. See the dashboard through the following link:
 
  https://agkerr.shinyapps.io/AlessandroKerr_A5_dashboard3/
+ 
+One thing to consider during an analysis like this are regions where sensors do not exist, but where the population is also scarce. For example, you would not want the "score" to determine that a sensor should be placed in the middle of a forest where it will not benefit a large population. By selecting factors like population density, coverage area, and racial distribution a holistic measure could be taken. In terms of the actual calculation of the score, it should be noted that a higher score represents better data equity in that CBG. For this reason, a user can select whether they value (or dis value these characteristics) by using a -1 to +1 range for each factor. For example, it would be logical for a higher population density to warrant a lower score (negative weight implying a sensor should be placed there), whereas, a higher coverage area would cause a higher score (positive weight implying sensor should not be placed there). Nonetheless, this leaves some of the decision up to the user, and allows for the impact incremental weight changes to be seen.
 
 ```{r}
-mapview(smc_sensors) + mapview(smc_cbgs)
+mapview(smc_sensors %>% filter(location_type == "outside")) + mapview(smc_cbgs)
 
-#change to outdoors, factors of 
+
 
 smc_sensors_buffer <- smc_sensors %>%
   st_buffer(dist = 400) %>%
